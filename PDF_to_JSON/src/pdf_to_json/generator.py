@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 
 from tenacity import (
-    retry,
+    Retrying,
     retry_if_exception_type,
     stop_after_attempt,
     wait_exponential,
@@ -73,8 +73,17 @@ class OpenAIChatCompleter:
 
     def __init__(self, config: GeneratorConfig | None = None) -> None:
         self.config = config or GeneratorConfig.from_env()
+        self._client_obj: Any | None = None
 
     def _client(self) -> Any:
+        """Create (once) and return the OpenAI client.
+
+        Configuration problems raised here (missing package / API key) are NOT
+        retried — they cannot succeed on a second attempt.
+        """
+        if self._client_obj is not None:
+            return self._client_obj
+
         try:
             from openai import OpenAI  # type: ignore
         except ImportError as exc:  # pragma: no cover
@@ -92,28 +101,38 @@ class OpenAIChatCompleter:
         kwargs: dict[str, Any] = {"timeout": self.config.timeout}
         if base_url:
             kwargs["base_url"] = base_url
-        return OpenAI(**kwargs)
+        self._client_obj = OpenAI(**kwargs)
+        return self._client_obj
 
-    @retry(
-        reraise=True,
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=2, min=2, max=30),
-        retry=retry_if_exception_type(Exception),
-    )
     def complete(self, *, system: str, user: str) -> str:
+        # Resolve the client first so config errors surface immediately and are
+        # never retried. Only the network call below is wrapped in retries.
         client = self._client()
-        response = client.chat.completions.create(
-            model=self.config.model,
-            temperature=self.config.temperature,
-            response_format={"type": "json_object"},
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
+
+        retryer = Retrying(
+            reraise=True,
+            stop=stop_after_attempt(max(1, self.config.max_retries)),
+            wait=wait_exponential(multiplier=2, min=2, max=30),
+            retry=retry_if_exception_type(Exception),
         )
-        content = response.choices[0].message.content
-        if not content:
-            raise GenerationError("LLM returned an empty response.")
+
+        content: str | None = None
+        for attempt in retryer:
+            with attempt:
+                response = client.chat.completions.create(
+                    model=self.config.model,
+                    temperature=self.config.temperature,
+                    response_format={"type": "json_object"},
+                    messages=[
+                        {"role": "system", "content": system},
+                        {"role": "user", "content": user},
+                    ],
+                )
+                message_content = response.choices[0].message.content
+                if not message_content:
+                    raise GenerationError("LLM returned an empty response.")
+                content = message_content
+        assert content is not None  # for type-checkers; loop guarantees it
         return content
 
 

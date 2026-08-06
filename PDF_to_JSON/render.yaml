@@ -1,0 +1,42 @@
+# Render Blueprint for the PDF -> JSON Template Translator API.
+# Deploy: push to GitHub, then in Render click "New +" -> "Blueprint" and point
+# it at this repo. Render reads this file automatically.
+#
+# Two options are provided; keep ONE `services` entry and delete the other.
+
+services:
+  # ---- Option A: native Python runtime (simplest) --------------------------
+  - type: web
+    name: pdf-to-json
+    runtime: python
+    rootDir: PDF_to_JSON
+    plan: free
+    buildCommand: pip install .
+    startCommand: uvicorn pdf_to_json.api:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.3"
+      - key: OPENAI_API_KEY
+        sync: false        # set this as a secret in the Render dashboard
+      - key: PDF_TO_JSON_MODEL
+        value: gpt-4o
+      - key: PDF_TO_JSON_CORS_ORIGINS
+        value: "*"
+
+  # ---- Option B: Docker runtime (more reproducible) ------------------------
+  #   Uncomment this block and comment out Option A to use the Dockerfile.
+  # - type: web
+  #   name: pdf-to-json
+  #   runtime: docker
+  #   rootDir: PDF_to_JSON
+  #   dockerfilePath: PDF_to_JSON/Dockerfile
+  #   plan: free
+  #   healthCheckPath: /health
+  #   autoDeploy: true
+  #   envVars:
+  #     - key: OPENAI_API_KEY
+  #       sync: false
+  #     - key: PDF_TO_JSON_MODEL
+  #       value: gpt-4o

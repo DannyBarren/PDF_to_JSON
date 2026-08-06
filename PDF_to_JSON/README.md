@@ -184,13 +184,72 @@ See the full annotated shape in the schema module and a real example in
 
 ---
 
+## Deployment
+
+The service is a standard ASGI (FastAPI) app started with:
+
+```bash
+uvicorn pdf_to_json.api:app --host 0.0.0.0 --port $PORT
+```
+
+It reads configuration from environment variables (see `.env.example`):
+
+| Variable | Default | Purpose |
+| -------- | ------- | ------- |
+| `OPENAI_API_KEY` | — (required) | LLM access for generation. |
+| `PDF_TO_JSON_MODEL` | `gpt-4o` | Generation model. |
+| `PORT` | `8000` | Bind port (set automatically by most hosts). |
+| `PDF_TO_JSON_CORS_ORIGINS` | `*` | Comma-separated allowed origins. |
+| `PDF_TO_JSON_MAX_UPLOAD_MB` | `25` | Max upload size. |
+| `PDF_TO_JSON_LOG_LEVEL` | `INFO` | Log verbosity. |
+
+Use `GET /health` as the platform health check — it also reports
+`llm_configured`, so you can confirm your key was wired up correctly after a
+deploy.
+
+### Render (recommended)
+
+A [`render.yaml`](render.yaml) blueprint is included. Push to GitHub, then in
+Render choose **New + → Blueprint** and select the repo. Set `OPENAI_API_KEY` as
+a secret in the dashboard. The blueprint sets `rootDir: PDF_to_JSON`, builds with
+`pip install .`, starts uvicorn on `$PORT`, and health-checks `/health`. A Docker
+option is included (commented out) in the same file.
+
+### Docker (portable: Railway, Fly.io, Cloud Run, any host)
+
+```bash
+cd PDF_to_JSON
+docker build -t pdf-to-json .
+docker run -p 8000:8000 -e OPENAI_API_KEY=sk-... pdf-to-json
+# -> http://localhost:8000/health
+```
+
+### Vercel (works, with a caveat)
+
+[`vercel.json`](vercel.json) + [`api/index.py`](api/index.py) expose the app as a
+Python serverless function. Set the project **Root Directory** to `PDF_to_JSON`
+and add `OPENAI_API_KEY` in the Vercel dashboard.
+
+> ⚠️ Serverless functions have a max execution duration (60s on Hobby). The LLM
+> generation stage can approach or exceed this on large PDFs, causing timeouts.
+> For reliable production use, prefer **Render** or **Docker**. If you do use
+> Vercel, set `PDF_TO_JSON_MODEL=gpt-4o-mini` to reduce latency.
+
+### Pre-launch checklist
+
+- [ ] `OPENAI_API_KEY` set in the host's secret store (not committed).
+- [ ] `GET /health` returns `"llm_configured": true` after deploy.
+- [ ] `PDF_TO_JSON_CORS_ORIGINS` restricted to your frontend origin(s) in prod.
+- [ ] Smoke test: `curl -F "file=@sample.pdf" https://<host>/translate`.
+- [ ] Consider a smaller/faster model for cost during testing.
+
 ## Development & tests
 
 The schema and validator tests run **without an API key** (the pipeline test uses
 a fake LLM completer):
 
 ```bash
-pytest            # 23 tests, all offline
+pytest            # 30 tests, all offline (schema, validator, pipeline, API)
 ```
 
 Project layout:
@@ -206,9 +265,14 @@ PDF_to_JSON/
 │   ├── pipeline.py     # extract → generate → validate
 │   ├── cli.py          # Typer CLI
 │   └── api.py          # FastAPI app
-├── tests/              # schema, validator, pipeline (offline)
+├── tests/              # schema, validator, pipeline, API (offline)
 ├── examples/           # sample_output.json
-└── scripts/run_example.py
+├── scripts/run_example.py
+├── api/index.py        # Vercel serverless entry point
+├── Dockerfile          # portable container image
+├── render.yaml         # Render blueprint
+├── Procfile            # Heroku/Render-style start command
+└── vercel.json         # Vercel config
 ```
 
 ## Design principles
