@@ -1,0 +1,370 @@
+{
+  "schema_version": 3,
+  "document_class": "inspection_report",
+  "report_type": "residential_hvac_maintenance_inspection",
+  "title": "Residential HVAC Maintenance & Inspection Report",
+  "business_name": "",
+  "logo_url": null,
+  "job_address": "",
+  "template_description": "Guided capture workflow for a residential HVAC maintenance and inspection visit on a split-system heat pump.",
+  "pdf_styling": {
+    "primary_color": "#1e3a8a",
+    "secondary_color": "#64748b",
+    "accent_color": "#2563eb",
+    "font_family": "Helvetica, Arial, sans-serif",
+    "header_style": "bold",
+    "photo_grid": "2-column with caption below",
+    "include_timestamps": true,
+    "include_narration_in_caption": true,
+    "page_footer": "{business_name} · Confidential · Page {page} of {total_pages}",
+    "page_header": "{report_title}",
+    "logo_placement": "header-left",
+    "show_summary_page": true,
+    "show_disclaimer": true,
+    "disclaimer_text": "This report documents conditions observed during a guided field inspection. It reflects the state of the property or equipment at the time of the visit and is not a warranty or guarantee of future performance.",
+    "show_photo_appendix": true,
+    "section_page_break": "before",
+    "severity_colors": {
+      "critical": "#dc2626",
+      "high": "#ea580c",
+      "medium": "#d97706",
+      "low": "#16a34a",
+      "info": "#2563eb"
+    },
+    "severity_bands": {
+      "critical": "Immediate action required",
+      "high": "Address promptly",
+      "medium": "Plan to repair",
+      "low": "Monitor",
+      "info": "Informational only"
+    }
+  },
+  "guidance": {
+    "intro_script": "Welcome. We're going to walk through this HVAC maintenance visit together, one system at a time. Take your time and describe what you see out loud — I'll turn it into the report.",
+    "outro_script": "That completes the HVAC inspection capture. Double-check that every required section has a photo and a spoken note, then submit.",
+    "identification_phrase": "Mark this.",
+    "estimated_total_minutes": 20,
+    "sections": [
+      {
+        "section_id": "site_details",
+        "title": "Site & Job Details",
+        "capture_order": 1,
+        "required": true,
+        "min_marks": 1,
+        "voice_prompt": "Start by confirming the customer, the address, and the system you're servicing. Read the system type, tonnage, and install year off the unit's data plate.",
+        "on_screen_text": "Site & job details",
+        "worker_instructions": "Find the outdoor unit's data plate (a metal sticker on the side of the condenser). Say the customer name, service address, system type (for example 'split-system heat pump'), tonnage, and the year it was installed. Photograph the data plate so the details are on record.",
+        "success_criteria": "Customer name and address are stated, and a legible photo of the system data plate is captured showing model and tonnage.",
+        "suggested_phrases": [
+          "This is a 3-ton split-system heat pump",
+          "Installed in 2016",
+          "Customer is R. Alvarez at 482 Cedar Lane"
+        ],
+        "estimated_seconds": 120
+      },
+      {
+        "section_id": "thermostat_controls",
+        "title": "Thermostat & Controls",
+        "capture_order": 2,
+        "required": true,
+        "min_marks": 1,
+        "voice_prompt": "Go to the thermostat. Cycle it through heating and cooling and tell me whether the system responds and whether the schedule looks correct.",
+        "on_screen_text": "Thermostat & controls",
+        "worker_instructions": "At the thermostat, switch to cooling and then heating and wait to hear the system respond. Confirm the programmed schedule is active. Photograph the thermostat screen. Note any error codes or calibration issues you hear or see.",
+        "success_criteria": "Thermostat is shown responding to at least one mode change, a photo of the display is captured, and the technician states whether calibration/schedule are correct.",
+        "suggested_phrases": [
+          "Thermostat is calling for cooling",
+          "The schedule is active and correct",
+          "Display reads 72 degrees",
+          "No error codes"
+        ],
+        "estimated_seconds": 90
+      },
+      {
+        "section_id": "air_filter",
+        "title": "Air Filter",
+        "capture_order": 3,
+        "required": true,
+        "min_marks": 1,
+        "voice_prompt": "Pull the air filter. Read the size and MERV rating out loud and tell me how dirty it is.",
+        "on_screen_text": "Air filter",
+        "worker_instructions": "Locate and remove the return air filter. Read the printed size (for example 16x25x1) and MERV rating aloud. Hold it up to the light and describe how dirty it is. Photograph the filter face. Note if it needs replacement.",
+        "success_criteria": "Filter size and rating are stated, a photo of the filter is captured, and its condition (clean / dirty / needs replacement) is clearly described.",
+        "suggested_phrases": [
+          "This is a 16 by 25 by 1 MERV 8",
+          "The filter is moderately dirty",
+          "Recommend replacing this filter",
+          "Filter is clean"
+        ],
+        "estimated_seconds": 75
+      },
+      {
+        "section_id": "outdoor_condenser",
+        "title": "Outdoor Condenser Unit",
+        "capture_order": 4,
+        "required": true,
+        "min_marks": 1,
+        "voice_prompt": "Move to the outdoor condenser. Pan across the coil, the fan, and the refrigerant lines, and describe anything that looks off.",
+        "on_screen_text": "Outdoor condenser",
+        "worker_instructions": "At the outdoor unit, inspect the coil for debris or bent fins, watch the fan motor run, and check that the refrigerant lines are insulated. Slowly pan across the unit on camera and describe the condition of each part as you go.",
+        "success_criteria": "The coil, fan operation, and refrigerant line insulation are each shown on camera and described; any debris or damage is called out or the technician states none was found.",
+        "suggested_phrases": [
+          "Coil has light debris",
+          "Fan motor runs smoothly",
+          "Refrigerant lines are insulated",
+          "No damage to the fins"
+        ],
+        "estimated_seconds": 150
+      },
+      {
+        "section_id": "indoor_air_handler",
+        "title": "Indoor Air Handler & Coil",
+        "capture_order": 5,
+        "required": true,
+        "min_marks": 1,
+        "voice_prompt": "Open up the indoor air handler. Show me the blower wheel, the evaporator coil, and the condensate drain, and tell me if the drain is flowing.",
+        "on_screen_text": "Air handler & coil",
+        "worker_instructions": "Access the indoor air handler. Inspect the blower wheel for dust buildup, check the evaporator coil for corrosion, and confirm the condensate drain is flowing freely. Photograph each and describe what you see.",
+        "success_criteria": "Blower wheel, evaporator coil, and condensate drain are each captured and described, and drain flow (flowing / blocked) is stated.",
+        "suggested_phrases": [
+          "Blower wheel is clean",
+          "Condensate drain is flowing freely",
+          "No corrosion on the coil",
+          "Drain line is clear"
+        ],
+        "estimated_seconds": 150
+      },
+      {
+        "section_id": "electrical_safety",
+        "title": "Electrical & Safety",
+        "capture_order": 6,
+        "required": true,
+        "min_marks": 1,
+        "voice_prompt": "Check the electrical disconnect and controls. Confirm the disconnect is present and labeled, and that the contactor and capacitor are within spec.",
+        "on_screen_text": "Electrical & safety",
+        "worker_instructions": "Locate the electrical disconnect near the outdoor unit and confirm it is present and labeled. If trained and safe to do so, verify the contactor and capacitor readings are within spec. Photograph the disconnect and any readings. Never open live electrical components you are not trained to service.",
+        "success_criteria": "The disconnect is shown present and labeled, and the technician states whether the contactor/capacitor are within spec or notes any electrical concern.",
+        "suggested_phrases": [
+          "Disconnect is present and labeled",
+          "Contactor is within spec",
+          "Capacitor reads within range",
+          "No electrical concerns"
+        ],
+        "estimated_seconds": 120
+      },
+      {
+        "section_id": "summary_recommendations",
+        "title": "Summary & Recommendations",
+        "capture_order": 7,
+        "required": true,
+        "min_marks": 1,
+        "voice_prompt": "Wrap up with your overall assessment. Summarize the system's condition and list any recommended repairs or follow-up work.",
+        "on_screen_text": "Summary & recommendations",
+        "worker_instructions": "Give a plain-language summary of how the system is running overall, then list every recommendation you made (for example replacing the filter or cleaning the coil) with a rough priority. Note anything the customer should schedule.",
+        "success_criteria": "A spoken overall assessment is recorded and every recommendation from the visit is listed with a priority the customer can act on.",
+        "suggested_phrases": [
+          "System is operating normally",
+          "Recommend replacing the air filter",
+          "Schedule a coil cleaning",
+          "No urgent repairs needed"
+        ],
+        "estimated_seconds": 120
+      }
+    ]
+  },
+  "content_structure": {
+    "summary_page_title": "Executive Summary",
+    "organization": "section_order",
+    "sections": [
+      {
+        "section_id": "site_details",
+        "title": "Site & Job Details",
+        "default_text": "System and site details were not recorded during this visit.",
+        "fields": [
+          "customer",
+          "job_address",
+          "system_type",
+          "tonnage",
+          "install_year"
+        ],
+        "writer_instructions": "State the customer, service address, and full system description (type, tonnage, install year) from the captured data plate. Keep it factual; do not assess condition here.",
+        "tone": "professional neutral",
+        "min_summary_words": 45,
+        "show_photo": true,
+        "show_severity_badge": true,
+        "image_placement": {
+          "required": true,
+          "position": "after_summary",
+          "caption_style": "narration_excerpt_with_timestamp",
+          "max_images": 3
+        },
+        "layout_hints": {
+          "page_break_before": false,
+          "callout_style": "severity_border"
+        }
+      },
+      {
+        "section_id": "thermostat_controls",
+        "title": "Thermostat & Controls",
+        "default_text": "Thermostat operation was not assessed during this visit.",
+        "fields": [
+          "operation",
+          "calibration",
+          "schedule",
+          "findings",
+          "severity"
+        ],
+        "writer_instructions": "Describe how the thermostat responded to mode changes and whether calibration and schedule are correct. Report any error codes verbatim and assign a severity to any fault.",
+        "tone": "professional neutral",
+        "min_summary_words": 55,
+        "show_photo": true,
+        "show_severity_badge": true,
+        "image_placement": {
+          "required": true,
+          "position": "after_summary",
+          "caption_style": "narration_excerpt_with_timestamp",
+          "max_images": 3
+        },
+        "layout_hints": {
+          "page_break_before": false,
+          "callout_style": "severity_border"
+        }
+      },
+      {
+        "section_id": "air_filter",
+        "title": "Air Filter",
+        "default_text": "The air filter was not inspected during this visit.",
+        "fields": [
+          "filter_size",
+          "merv_rating",
+          "condition",
+          "recommendation",
+          "severity"
+        ],
+        "writer_instructions": "Record the filter size and MERV rating, describe its condition, and give a clear replacement recommendation. Flag a dirty filter as at least low severity affecting efficiency.",
+        "tone": "professional neutral",
+        "min_summary_words": 45,
+        "show_photo": true,
+        "show_severity_badge": true,
+        "image_placement": {
+          "required": true,
+          "position": "after_summary",
+          "caption_style": "narration_excerpt_with_timestamp",
+          "max_images": 3
+        },
+        "layout_hints": {
+          "page_break_before": false,
+          "callout_style": "severity_border"
+        }
+      },
+      {
+        "section_id": "outdoor_condenser",
+        "title": "Outdoor Condenser Unit",
+        "default_text": "The outdoor condenser unit was not accessible or not assessed during this visit.",
+        "fields": [
+          "coil_condition",
+          "fan_operation",
+          "refrigerant_lines",
+          "findings",
+          "recommendations",
+          "severity"
+        ],
+        "writer_instructions": "Summarize coil condition, fan operation, and refrigerant line insulation. List any debris, bent fins, or damage with location and severity, and recommend cleaning or repair where warranted.",
+        "tone": "professional neutral",
+        "min_summary_words": 60,
+        "show_photo": true,
+        "show_severity_badge": true,
+        "image_placement": {
+          "required": true,
+          "position": "after_summary",
+          "caption_style": "narration_excerpt_with_timestamp",
+          "max_images": 3
+        },
+        "layout_hints": {
+          "page_break_before": false,
+          "callout_style": "severity_border"
+        }
+      },
+      {
+        "section_id": "indoor_air_handler",
+        "title": "Indoor Air Handler & Coil",
+        "default_text": "The indoor air handler and coil were not accessible or not assessed during this visit.",
+        "fields": [
+          "blower_condition",
+          "coil_condition",
+          "condensate_drain",
+          "findings",
+          "recommendations",
+          "severity"
+        ],
+        "writer_instructions": "Describe the blower wheel and evaporator coil condition and confirm condensate drain flow. Call out any corrosion or blockage with severity and recommend corrective action.",
+        "tone": "professional neutral",
+        "min_summary_words": 60,
+        "show_photo": true,
+        "show_severity_badge": true,
+        "image_placement": {
+          "required": true,
+          "position": "after_summary",
+          "caption_style": "narration_excerpt_with_timestamp",
+          "max_images": 3
+        },
+        "layout_hints": {
+          "page_break_before": false,
+          "callout_style": "severity_border"
+        }
+      },
+      {
+        "section_id": "electrical_safety",
+        "title": "Electrical & Safety",
+        "default_text": "Electrical components were not assessed during this visit.",
+        "fields": [
+          "disconnect",
+          "contactor",
+          "capacitor",
+          "findings",
+          "severity"
+        ],
+        "writer_instructions": "Confirm the disconnect is present and labeled and report contactor/capacitor status. Treat any electrical safety defect as high or critical severity and recommend a licensed technician.",
+        "tone": "professional neutral",
+        "min_summary_words": 50,
+        "show_photo": true,
+        "show_severity_badge": true,
+        "image_placement": {
+          "required": true,
+          "position": "after_summary",
+          "caption_style": "narration_excerpt_with_timestamp",
+          "max_images": 3
+        },
+        "layout_hints": {
+          "page_break_before": false,
+          "callout_style": "severity_border"
+        }
+      },
+      {
+        "section_id": "summary_recommendations",
+        "title": "Summary & Recommendations",
+        "default_text": "No overall summary was recorded for this visit.",
+        "fields": [
+          "overall_assessment",
+          "prioritized_recommendations",
+          "follow_up"
+        ],
+        "writer_instructions": "Provide a concise overall assessment of system health and a prioritized, actionable list of recommendations drawn from the section findings. Do not introduce issues not captured earlier.",
+        "tone": "professional neutral",
+        "min_summary_words": 60,
+        "show_photo": false,
+        "show_severity_badge": true,
+        "image_placement": {
+          "required": false,
+          "position": "after_summary",
+          "caption_style": "narration_excerpt_with_timestamp",
+          "max_images": 3
+        },
+        "layout_hints": {
+          "page_break_before": false,
+          "callout_style": "severity_border"
+        }
+      }
+    ]
+  }
+}
