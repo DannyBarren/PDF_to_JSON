@@ -95,6 +95,31 @@ pdf-to-json extract path/to/report.pdf
 pdf-to-json validate template.json
 ```
 
+## Web UI
+
+The service ships with a **fully functional browser UI** — no separate frontend
+to build or deploy. Start the server and open it in your browser:
+
+```bash
+uvicorn pdf_to_json.api:app --reload --port 8000
+# then open http://localhost:8000/
+```
+
+From the page you can:
+
+- **Drag & drop (or pick) a PDF** and click **Translate PDF**.
+- See a live **service/health indicator** (shows whether your `OPENAI_API_KEY`
+  is configured).
+- View a **summary** (document class, report type, section count, estimated
+  minutes) and a readable **Overview** of every guidance section (voice prompt,
+  worker instructions, success criteria, suggested phrases, writer instructions,
+  and required fields).
+- Switch to the **JSON** tab for the syntax-highlighted template, then **Copy**
+  or **Download `.json`** to drop straight into JobDoc.
+
+The UI is a single self-contained page (`src/pdf_to_json/static/index.html`)
+served at `/`, so it works same-origin with no external dependencies.
+
 ## API usage
 
 Start the service:
@@ -105,8 +130,12 @@ uvicorn pdf_to_json.api:app --reload --port 8000
 
 Endpoints:
 
-- `GET /health` → `{"status": "ok", "version": "...", "schema_version": "3"}`
-- `POST /translate` → multipart form upload (`file`), returns the validated JSON template.
+- `GET /` → the browser UI (HTML)
+- `GET /info` → machine-readable service info + endpoint map
+- `GET /health` → `{"status": "ok", ..., "llm_configured": true, "model": "..."}`
+- `GET /schema` → the JSON Schema of the `ReportTemplate` output contract
+- `POST /translate` → multipart form upload (`file`), returns the validated JSON template
+- `GET /docs` → interactive OpenAPI docs
 
 Example:
 
@@ -246,7 +275,7 @@ The schema and validator tests run **without an API key** (the pipeline test use
 a fake LLM completer):
 
 ```bash
-pytest            # 30 tests, all offline (schema, validator, pipeline, API)
+pytest            # 31 tests, all offline (schema, validator, pipeline, API, UI)
 ```
 
 Project layout:
@@ -261,7 +290,8 @@ Project layout:
 │   ├── validator.py    # Strict validation + mirroring/quality checks
 │   ├── pipeline.py     # extract → generate → validate
 │   ├── cli.py          # Typer CLI
-│   └── api.py          # FastAPI app
+│   ├── api.py          # FastAPI app (serves the UI + JSON API)
+│   └── static/index.html  # Self-contained browser UI
 ├── tests/              # schema, validator, pipeline, API (offline)
 ├── examples/           # sample_output.json
 ├── scripts/run_example.py

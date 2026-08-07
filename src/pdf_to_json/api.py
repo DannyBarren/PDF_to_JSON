@@ -31,11 +31,21 @@ except Exception:  # pragma: no cover
 
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 
 from . import __version__
 from .pipeline import PipelineError, TranslationPipeline
 from .schema import ReportTemplate
+
+_STATIC_DIR = Path(__file__).parent / "static"
+
+
+def _load_index_html() -> str | None:
+    index = _STATIC_DIR / "index.html"
+    try:
+        return index.read_text(encoding="utf-8")
+    except OSError:  # pragma: no cover - only if packaging missed the asset
+        return None
 
 logging.basicConfig(
     level=os.getenv("PDF_TO_JSON_LOG_LEVEL", "INFO").upper(),
@@ -100,14 +110,33 @@ app.add_middleware(
 )
 
 
-@app.get("/")
-def root() -> dict[str, object]:
-    """Human-friendly service info."""
+_INDEX_HTML = _load_index_html()
+
+
+@app.get("/", response_class=HTMLResponse)
+def root() -> HTMLResponse:
+    """Serve the browser UI (falls back to JSON info if the asset is missing)."""
+    if _INDEX_HTML is not None:
+        return HTMLResponse(content=_INDEX_HTML)
+    return HTMLResponse(
+        content=(
+            "<h1>PDF -> JSON Template Translator</h1>"
+            "<p>UI asset not found. See <a href='/docs'>/docs</a> and "
+            "<a href='/info'>/info</a>.</p>"
+        ),
+        status_code=200,
+    )
+
+
+@app.get("/info")
+def info() -> dict[str, object]:
+    """Machine-readable service info + endpoint map."""
     return {
         "service": "PDF -> JSON Template Translator",
         "version": __version__,
         "schema_version": 3,
         "endpoints": {
+            "ui": "GET /",
             "health": "GET /health",
             "schema": "GET /schema",
             "translate": "POST /translate (multipart form field 'file')",

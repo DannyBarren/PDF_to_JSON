@@ -22,8 +22,15 @@ class _FakeCompleter:
         return json.dumps(self.payload)
 
 
-def test_root_lists_endpoints():
+def test_root_serves_html_ui():
     r = client.get("/")
+    assert r.status_code == 200
+    assert "text/html" in r.headers["content-type"]
+    assert "PDF" in r.text and "Translate PDF" in r.text
+
+
+def test_info_lists_endpoints():
+    r = client.get("/info")
     assert r.status_code == 200
     assert "endpoints" in r.json()
 

@@ -42,4 +42,4 @@ testpaths = ["tests"]
 addopts = "-q"
 
 [tool.setuptools.package-data]
-pdf_to_json = ["py.typed"]
+pdf_to_json = ["py.typed", "static/*"]

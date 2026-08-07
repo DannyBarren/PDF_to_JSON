@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PDF → JSON Template Translator</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%231e3a8a'/%3E%3Ctext x='50' y='68' font-size='54' text-anchor='middle' fill='white' font-family='Arial'%3E%7B%7D%3C/text%3E%3C/svg%3E" />
+  <style>
+    :root {
+      --primary: #1e3a8a;
+      --primary-600: #1d4ed8;
+      --accent: #2563eb;
+      --bg: #f1f5f9;
+      --card: #ffffff;
+      --text: #0f172a;
+      --muted: #64748b;
+      --border: #e2e8f0;
+      --ok: #16a34a;
+      --warn: #d97706;
+      --err: #dc2626;
+      --radius: 14px;
+      --shadow: 0 1px 3px rgba(15, 23, 42, .08), 0 8px 24px rgba(15, 23, 42, .06);
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: var(--accent); }
+
+    header.site {
+      background: linear-gradient(135deg, var(--primary) 0%, #312e81 100%);
+      color: #fff;
+      padding: 28px 20px 26px;
+    }
+    header.site .wrap { max-width: 980px; margin: 0 auto; }
+    header.site h1 { margin: 0 0 6px; font-size: 1.55rem; letter-spacing: -.01em; }
+    header.site p { margin: 0; color: #c7d2fe; font-size: .95rem; }
+    .health {
+      display: inline-flex; align-items: center; gap: 8px;
+      margin-top: 14px; font-size: .82rem; color: #e0e7ff;
+      background: rgba(255,255,255,.10); padding: 6px 12px; border-radius: 999px;
+    }
+    .dot { width: 9px; height: 9px; border-radius: 50%; background: #94a3b8; }
+    .dot.ok { background: #4ade80; box-shadow: 0 0 0 3px rgba(74,222,128,.25); }
+    .dot.bad { background: #f87171; box-shadow: 0 0 0 3px rgba(248,113,113,.25); }
+
+    main { max-width: 980px; margin: -14px auto 60px; padding: 0 20px; }
+
+    .card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--radius); box-shadow: var(--shadow); padding: 22px;
+      margin-top: 22px;
+    }
+
+    /* Dropzone */
+    #drop {
+      border: 2px dashed #cbd5e1; border-radius: var(--radius);
+      padding: 38px 20px; text-align: center; cursor: pointer;
+      transition: border-color .15s, background .15s;
+      background: #f8fafc;
+    }
+    #drop.drag { border-color: var(--accent); background: #eff6ff; }
+    #drop svg { width: 46px; height: 46px; color: var(--primary); }
+    #drop h3 { margin: 12px 0 4px; font-size: 1.05rem; }
+    #drop p { margin: 0; color: var(--muted); font-size: .9rem; }
+    #drop .browse { color: var(--accent); font-weight: 600; text-decoration: underline; }
+
+    .filerow {
+      display: none; align-items: center; justify-content: space-between;
+      gap: 12px; margin-top: 14px; padding: 12px 14px;
+      background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px;
+    }
+    .filerow.show { display: flex; }
+    .filerow .meta { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .filerow .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .filerow .size { color: var(--muted); font-size: .85rem; white-space: nowrap; }
+    .filerow button { background: none; border: none; color: var(--err); cursor: pointer; font-size: .85rem; }
+
+    .actions { display: flex; gap: 12px; align-items: center; margin-top: 18px; flex-wrap: wrap; }
+    button.btn {
+      appearance: none; border: none; border-radius: 10px; cursor: pointer;
+      font-size: .95rem; font-weight: 600; padding: 12px 20px;
+      background: var(--primary-600); color: #fff; transition: background .15s, opacity .15s;
+    }
+    button.btn:hover:not(:disabled) { background: var(--primary); }
+    button.btn:disabled { opacity: .5; cursor: not-allowed; }
+    button.btn.secondary { background: #fff; color: var(--primary-600); border: 1px solid #bfdbfe; }
+    button.btn.secondary:hover:not(:disabled) { background: #eff6ff; }
+    .hint { color: var(--muted); font-size: .85rem; }
+
+    /* Status / spinner */
+    #status { display: none; align-items: center; gap: 12px; margin-top: 18px; color: var(--muted); font-size: .92rem; }
+    #status.show { display: flex; }
+    .spinner {
+      width: 20px; height: 20px; border: 3px solid #cbd5e1; border-top-color: var(--accent);
+      border-radius: 50%; animation: spin .8s linear infinite; flex: none;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Banners */
+    .banner { display: none; margin-top: 18px; padding: 14px 16px; border-radius: 10px; font-size: .92rem; }
+    .banner.show { display: block; }
+    .banner.error { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; white-space: pre-wrap; }
+
+    /* Results */
+    #results { display: none; }
+    #results.show { display: block; }
+    .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; }
+    .stat { background: #f8fafc; border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+    .stat .label { font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+    .stat .value { font-size: 1.15rem; font-weight: 700; margin-top: 4px; word-break: break-word; }
+    .stat .value.small { font-size: .95rem; font-weight: 600; }
+
+    .tabs { display: flex; gap: 6px; margin-top: 22px; border-bottom: 1px solid var(--border); }
+    .tab { padding: 10px 16px; cursor: pointer; font-weight: 600; color: var(--muted); border-bottom: 2px solid transparent; font-size: .92rem; }
+    .tab.active { color: var(--primary-600); border-bottom-color: var(--primary-600); }
+    .panel { display: none; padding-top: 18px; }
+    .panel.active { display: block; }
+
+    /* Section cards */
+    .section {
+      border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; margin-bottom: 14px;
+    }
+    .section .head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .section .order {
+      width: 26px; height: 26px; border-radius: 50%; background: var(--primary); color: #fff;
+      display: inline-flex; align-items: center; justify-content: center; font-size: .8rem; font-weight: 700; flex: none;
+    }
+    .section h4 { margin: 0; font-size: 1.02rem; }
+    .pill { font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; padding: 3px 8px; border-radius: 999px; }
+    .pill.req { background: #fef3c7; color: #92400e; }
+    .pill.opt { background: #e2e8f0; color: #475569; }
+    .pill.time { background: #dbeafe; color: #1e40af; }
+    .section .field { margin-top: 10px; }
+    .section .field .k { font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-bottom: 2px; }
+    .section .field .v { font-size: .92rem; }
+    .phrases { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+    .phrase { background: #f1f5f9; border: 1px solid var(--border); border-radius: 999px; padding: 3px 10px; font-size: .82rem; }
+    .fields-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+    .fchip { background: #eef2ff; color: #3730a3; border-radius: 6px; padding: 2px 8px; font-size: .8rem; font-family: ui-monospace, Menlo, Consolas, monospace; }
+
+    /* JSON viewer */
+    .jsonbar { display: flex; justify-content: flex-end; gap: 10px; margin-bottom: 10px; }
+    pre.json {
+      margin: 0; background: #0f172a; color: #e2e8f0; border-radius: 12px; padding: 18px;
+      overflow: auto; max-height: 560px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: .82rem; line-height: 1.55;
+    }
+    .tok-key { color: #7dd3fc; }
+    .tok-str { color: #86efac; }
+    .tok-num { color: #fca5a5; }
+    .tok-bool { color: #c4b5fd; }
+    .tok-null { color: #94a3b8; }
+
+    footer { text-align: center; color: var(--muted); font-size: .82rem; padding: 20px; }
+    .toast {
+      position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%) translateY(20px);
+      background: #0f172a; color: #fff; padding: 10px 18px; border-radius: 999px; font-size: .88rem;
+      opacity: 0; transition: opacity .2s, transform .2s; pointer-events: none;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  </style>
+</head>
+<body>
+  <header class="site">
+    <div class="wrap">
+      <h1>PDF → JSON Template Translator</h1>
+      <p>Turn a trades PDF into a valid GenerSwift <code>ReportTemplate</code> (schema&nbsp;v3) for JobDoc.</p>
+      <div class="health" id="health"><span class="dot" id="healthDot"></span><span id="healthText">Checking service…</span></div>
+    </div>
+  </header>
+
+  <main>
+    <!-- Upload card -->
+    <section class="card" id="uploadCard">
+      <div id="drop">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="17 8 12 3 7 8"/>
+          <line x1="12" y1="3" x2="12" y2="15"/>
+        </svg>
+        <h3>Drop a PDF here</h3>
+        <p>or <span class="browse">choose a file</span> · PDF only</p>
+        <input type="file" id="fileInput" accept="application/pdf,.pdf" hidden />
+      </div>
+
+      <div class="filerow" id="fileRow">
+        <div class="meta">
+          <span class="name" id="fileName"></span>
+          <span class="size" id="fileSize"></span>
+        </div>
+        <button type="button" id="clearFile">Remove</button>
+      </div>
+
+      <div class="actions">
+        <button class="btn" id="translateBtn" disabled>Translate PDF</button>
+        <span class="hint">The LLM step can take 20–120s depending on document size.</span>
+      </div>
+
+      <div id="status">
+        <div class="spinner"></div>
+        <span id="statusText">Translating…</span>
+      </div>
+
+      <div class="banner error" id="errorBanner"></div>
+    </section>
+
+    <!-- Results card -->
+    <section class="card" id="results">
+      <div class="summary" id="summary"></div>
+
+      <div class="tabs">
+        <div class="tab active" data-tab="overview">Overview</div>
+        <div class="tab" data-tab="json">JSON</div>
+      </div>
+
+      <div class="panel active" id="panel-overview">
+        <div id="scripts"></div>
+        <div id="sections"></div>
+      </div>
+
+      <div class="panel" id="panel-json">
+        <div class="jsonbar">
+          <button class="btn secondary" id="copyBtn">Copy</button>
+          <button class="btn secondary" id="downloadBtn">Download .json</button>
+        </div>
+        <pre class="json" id="jsonView"></pre>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    PDF → JSON Template Translator · <a href="/docs">API docs</a> · <a href="/schema">Output schema</a>
+  </footer>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let selectedFile = null;
+    let lastTemplate = null;
+
+    // ---- Health check ----
+    (async function checkHealth() {
+      try {
+        const r = await fetch('/health');
+        const h = await r.json();
+        if (h.llm_configured) {
+          $('healthDot').className = 'dot ok';
+          $('healthText').textContent = `Service ready · model ${h.model}`;
+        } else {
+          $('healthDot').className = 'dot bad';
+          $('healthText').textContent = 'Service up, but OPENAI_API_KEY is not configured';
+        }
+      } catch (e) {
+        $('healthDot').className = 'dot bad';
+        $('healthText').textContent = 'Service unreachable';
+      }
+    })();
+
+    // ---- File selection ----
+    const drop = $('drop');
+    const fileInput = $('fileInput');
+
+    drop.addEventListener('click', () => fileInput.click());
+    drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('drag'); });
+    drop.addEventListener('dragleave', () => drop.classList.remove('drag'));
+    drop.addEventListener('drop', (e) => {
+      e.preventDefault(); drop.classList.remove('drag');
+      if (e.dataTransfer.files.length) setFile(e.dataTransfer.files[0]);
+    });
+    fileInput.addEventListener('change', () => { if (fileInput.files.length) setFile(fileInput.files[0]); });
+    $('clearFile').addEventListener('click', clearFile);
+
+    function humanSize(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+    }
+
+    function setFile(file) {
+      if (!file.name.toLowerCase().endsWith('.pdf')) {
+        showError('Please choose a PDF file.');
+        return;
+      }
+      hideError();
+      selectedFile = file;
+      $('fileName').textContent = file.name;
+      $('fileSize').textContent = humanSize(file.size);
+      $('fileRow').classList.add('show');
+      $('translateBtn').disabled = false;
+    }
+
+    function clearFile() {
+      selectedFile = null;
+      fileInput.value = '';
+      $('fileRow').classList.remove('show');
+      $('translateBtn').disabled = true;
+    }
+
+    // ---- Translate ----
+    $('translateBtn').addEventListener('click', translate);
+
+    async function translate() {
+      if (!selectedFile) return;
+      hideError();
+      $('results').classList.remove('show');
+      $('translateBtn').disabled = true;
+      $('status').classList.add('show');
+
+      const started = Date.now();
+      const timer = setInterval(() => {
+        const s = Math.floor((Date.now() - started) / 1000);
+        $('statusText').textContent = `Extracting → generating → validating… (${s}s)`;
+      }, 1000);
+      $('statusText').textContent = 'Extracting → generating → validating… (0s)';
+
+      const form = new FormData();
+      form.append('file', selectedFile, selectedFile.name);
+
+      try {
+        const r = await fetch('/translate', { method: 'POST', body: form });
+        clearInterval(timer);
+        const ct = r.headers.get('content-type') || '';
+        const payload = ct.includes('application/json') ? await r.json() : await r.text();
+        if (!r.ok) {
+          const detail = (payload && payload.detail) ? payload.detail : (typeof payload === 'string' ? payload : 'Request failed.');
+          showError(detail);
+          return;
+        }
+        lastTemplate = payload;
+        renderResults(payload);
+      } catch (e) {
+        clearInterval(timer);
+        showError('Network error: ' + e.message);
+      } finally {
+        $('status').classList.remove('show');
+        $('translateBtn').disabled = false;
+      }
+    }
+
+    // ---- Rendering ----
+    function esc(s) {
+      return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    function renderResults(t) {
+      // Summary stats
+      const g = t.guidance || {};
+      const stats = [
+        ['Document class', t.document_class, 'small'],
+        ['Report type', t.report_type, 'small'],
+        ['Sections', (g.sections || []).length, ''],
+        ['Est. minutes', g.estimated_total_minutes ?? '—', ''],
+        ['Schema', 'v' + t.schema_version, ''],
+      ];
+      $('summary').innerHTML = stats.map(([label, value, cls]) =>
+        `<div class="stat"><div class="label">${esc(label)}</div><div class="value ${cls}">${esc(value)}</div></div>`
+      ).join('');
+
+      // Scripts
+      $('scripts').innerHTML = `
+        <div class="section">
+          <div class="field"><div class="k">Title</div><div class="v"><strong>${esc(t.title)}</strong></div></div>
+          <div class="field"><div class="k">Description</div><div class="v">${esc(t.template_description)}</div></div>
+          <div class="field"><div class="k">Intro script</div><div class="v">${esc(g.intro_script || '')}</div></div>
+          <div class="field"><div class="k">Outro script</div><div class="v">${esc(g.outro_script || '')}</div></div>
+        </div>`;
+
+      // Merge guidance + content sections by section_id
+      const content = {};
+      ((t.content_structure || {}).sections || []).forEach(s => { content[s.section_id] = s; });
+      const gsections = (g.sections || []).slice().sort((a, b) => a.capture_order - b.capture_order);
+
+      $('sections').innerHTML = gsections.map(s => {
+        const c = content[s.section_id] || {};
+        const phrases = (s.suggested_phrases || []).map(p => `<span class="phrase">${esc(p)}</span>`).join('');
+        const fields = (c.fields || []).map(f => `<span class="fchip">${esc(f)}</span>`).join('');
+        return `
+        <div class="section">
+          <div class="head">
+            <span class="order">${esc(s.capture_order)}</span>
+            <h4>${esc(s.title)}</h4>
+            <span class="pill ${s.required ? 'req' : 'opt'}">${s.required ? 'Required' : 'Optional'}</span>
+            <span class="pill time">${esc(s.estimated_seconds)}s</span>
+          </div>
+          <div class="field"><div class="k">Voice prompt</div><div class="v">${esc(s.voice_prompt)}</div></div>
+          <div class="field"><div class="k">Worker instructions</div><div class="v">${esc(s.worker_instructions)}</div></div>
+          <div class="field"><div class="k">Success criteria</div><div class="v">${esc(s.success_criteria)}</div></div>
+          ${phrases ? `<div class="field"><div class="k">Suggested phrases</div><div class="phrases">${phrases}</div></div>` : ''}
+          ${c.writer_instructions ? `<div class="field"><div class="k">Writer instructions</div><div class="v">${esc(c.writer_instructions)}</div></div>` : ''}
+          ${fields ? `<div class="field"><div class="k">Required fields</div><div class="fields-list">${fields}</div></div>` : ''}
+        </div>`;
+      }).join('');
+
+      // JSON view
+      $('jsonView').innerHTML = highlightJSON(JSON.stringify(t, null, 2));
+
+      $('results').classList.add('show');
+      $('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function highlightJSON(json) {
+      const escaped = esc(json);
+      return escaped.replace(
+        /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false)\b|\bnull\b|-?\d+(?:\.\d+)?(?:[eE][+\-]?\d+)?)/g,
+        (match) => {
+          let cls = 'tok-num';
+          if (/^"/.test(match)) {
+            cls = /:$/.test(match) ? 'tok-key' : 'tok-str';
+          } else if (/true|false/.test(match)) {
+            cls = 'tok-bool';
+          } else if (/null/.test(match)) {
+            cls = 'tok-null';
+          }
+          return `<span class="${cls}">${match}</span>`;
+        }
+      );
+    }
+
+    // ---- Tabs ----
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+        tab.classList.add('active');
+        $('panel-' + tab.dataset.tab).classList.add('active');
+      });
+    });
+
+    // ---- Copy / Download ----
+    $('copyBtn').addEventListener('click', async () => {
+      if (!lastTemplate) return;
+      try {
+        await navigator.clipboard.writeText(JSON.stringify(lastTemplate, null, 2));
+        toast('Copied to clipboard');
+      } catch (e) { toast('Copy failed'); }
+    });
+
+    $('downloadBtn').addEventListener('click', () => {
+      if (!lastTemplate) return;
+      const blob = new Blob([JSON.stringify(lastTemplate, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = (lastTemplate.report_type || 'report_template') + '.json';
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+    });
+
+    // ---- Helpers ----
+    function showError(msg) {
+      const b = $('errorBanner');
+      b.textContent = msg;
+      b.classList.add('show');
+    }
+    function hideError() { $('errorBanner').classList.remove('show'); }
+
+    let toastTimer;
+    function toast(msg) {
+      const el = $('toast');
+      el.textContent = msg;
+      el.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => el.classList.remove('show'), 1800);
+    }
+  </script>
+</body>
+</html>
