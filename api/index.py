@@ -7,7 +7,7 @@ install.
 NOTE: Vercel serverless functions have a maximum execution duration (60s on the
 Hobby plan). The LLM generation stage can approach or exceed this on large PDFs.
 For reliable production use prefer Render / Docker (see README "Deployment").
-Set the project's Root Directory to ``PDF_to_JSON`` in the Vercel dashboard.
+The repository root is the project root, so no Root Directory override is needed.
 """
 
 from __future__ import annotations
