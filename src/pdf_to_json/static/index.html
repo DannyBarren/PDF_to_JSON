@@ -164,6 +164,22 @@
       opacity: 0; transition: opacity .2s, transform .2s; pointer-events: none;
     }
     .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* Full-window drag overlay */
+    #dragOverlay {
+      position: fixed; inset: 0; z-index: 1000; display: none;
+      align-items: center; justify-content: center;
+      background: rgba(30, 58, 138, .82); backdrop-filter: blur(2px);
+      color: #fff; text-align: center; padding: 24px;
+    }
+    #dragOverlay.show { display: flex; }
+    #dragOverlay .drag-inner {
+      border: 3px dashed rgba(255,255,255,.7); border-radius: 20px;
+      padding: 44px 60px; pointer-events: none;
+    }
+    #dragOverlay svg { width: 64px; height: 64px; }
+    #dragOverlay .drag-title { font-size: 1.4rem; font-weight: 700; margin-top: 14px; }
+    #dragOverlay .drag-sub { font-size: .95rem; color: #c7d2fe; margin-top: 4px; }
   </style>
 </head>
 <body>
@@ -240,6 +256,18 @@
 
   <div class="toast" id="toast"></div>
 
+  <div id="dragOverlay">
+    <div class="drag-inner">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="17 8 12 3 7 8"/>
+        <line x1="12" y1="3" x2="12" y2="15"/>
+      </svg>
+      <div class="drag-title">Drop your PDF anywhere to translate</div>
+      <div class="drag-sub">PDF files only</div>
+    </div>
+  </div>
+
   <script>
     const $ = (id) => document.getElementById(id);
     let selectedFile = null;
@@ -266,16 +294,54 @@
     // ---- File selection ----
     const drop = $('drop');
     const fileInput = $('fileInput');
+    const dragOverlay = $('dragOverlay');
 
     drop.addEventListener('click', () => fileInput.click());
-    drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('drag'); });
-    drop.addEventListener('dragleave', () => drop.classList.remove('drag'));
-    drop.addEventListener('drop', (e) => {
-      e.preventDefault(); drop.classList.remove('drag');
-      if (e.dataTransfer.files.length) setFile(e.dataTransfer.files[0]);
-    });
     fileInput.addEventListener('change', () => { if (fileInput.files.length) setFile(fileInput.files[0]); });
     $('clearFile').addEventListener('click', clearFile);
+
+    // Local dropzone highlight (visual only; the actual drop is handled globally).
+    drop.addEventListener('dragover', () => drop.classList.add('drag'));
+    drop.addEventListener('dragleave', () => drop.classList.remove('drag'));
+
+    function dragHasFiles(e) {
+      const types = e.dataTransfer && e.dataTransfer.types;
+      return types && Array.prototype.indexOf.call(types, 'Files') !== -1;
+    }
+
+    function pickPdf(fileList) {
+      const files = Array.from(fileList || []);
+      return files.find((f) => f.name.toLowerCase().endsWith('.pdf')) || files[0] || null;
+    }
+
+    // Accept a drop ANYWHERE on the page, and stop the browser from opening the
+    // file (its default behavior) when a drop lands outside the dropzone.
+    let dragDepth = 0;
+    window.addEventListener('dragenter', (e) => {
+      if (!dragHasFiles(e)) return;
+      e.preventDefault();
+      dragDepth++;
+      dragOverlay.classList.add('show');
+    });
+    window.addEventListener('dragover', (e) => {
+      if (!dragHasFiles(e)) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+    });
+    window.addEventListener('dragleave', (e) => {
+      if (!dragHasFiles(e)) return;
+      dragDepth = Math.max(0, dragDepth - 1);
+      if (dragDepth === 0) dragOverlay.classList.remove('show');
+    });
+    window.addEventListener('drop', (e) => {
+      if (!dragHasFiles(e)) return;
+      e.preventDefault();
+      dragDepth = 0;
+      dragOverlay.classList.remove('show');
+      drop.classList.remove('drag');
+      const file = pickPdf(e.dataTransfer.files);
+      if (file) setFile(file);
+    });
 
     function humanSize(bytes) {
       if (bytes < 1024) return bytes + ' B';
