@@ -18,6 +18,7 @@ from .schema import (
     PdfStyling,
     ReportTemplate,
 )
+from .normalize import normalize_template
 from .validator import TemplateValidationError, validate_template
 
 __version__ = "0.1.0"
@@ -35,4 +36,5 @@ __all__ = [
     "LayoutHints",
     "validate_template",
     "TemplateValidationError",
+    "normalize_template",
 ]

@@ -13,6 +13,7 @@ from typing import Any
 
 from .extractor import ExtractedDocument, ExtractionError, extract_pdf
 from .generator import ChatCompleter, GenerationError, TemplateGenerator
+from .normalize import normalize_template
 from .schema import ReportTemplate
 from .validator import TemplateValidationError, validate_template
 
@@ -61,9 +62,11 @@ class TranslationPipeline:
         except GenerationError as exc:
             raise PipelineError(f"Generation failed: {exc}") from exc
 
-        # 3. Validate (mandatory — never return an invalid template)
+        # 3. Normalize small, mechanically-fixable quirks, then validate
+        #    (validation is still the authoritative, final gate).
+        repaired = normalize_template(raw)
         try:
-            template = validate_template(raw)
+            template = validate_template(repaired)
         except TemplateValidationError as exc:
             raise PipelineError(
                 "The generated template failed strict validation:\n"

@@ -97,7 +97,7 @@ Each ContentSection (mirror of the guidance section with the same section_id):
     "required": true|false,
     "position": one of ["before_summary","after_summary","inline","appendix"],
     "caption_style": "narration_excerpt_with_timestamp",
-    "max_images": <int 1-10>
+    "max_images": <int between 1 and 10; never 0 — for a text-only section set show_photo=false and image_placement.required=false but still use max_images >= 1>
   },
   "layout_hints": { "page_break_before": false, "callout_style": "severity_border" }
 }
@@ -105,6 +105,7 @@ Each ContentSection (mirror of the guidance section with the same section_id):
 ## HARD RULES
 - Every section_id in guidance.sections MUST appear in content_structure.sections and vice versa (perfect 1:1 mirroring, same ids).
 - capture_order must be a complete sequential sequence 1..N (no gaps, no duplicates).
+- Every numeric field must be within range: min_marks >= 0, estimated_seconds >= 1, min_summary_words 45-70, image_placement.max_images between 1 and 10 (never 0).
 - Order sections to follow the logical flow of the source PDF.
 - worker_instructions and success_criteria must be written for a brand-new technician: specific, actionable, verifiable. No vague filler.
 - writer_instructions must be specific to the section (not boilerplate). Reference the actual subject matter of the section.

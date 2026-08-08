@@ -45,8 +45,9 @@ against that schema, JobDoc can consume it.
 | ----- | ------ | -------------- |
 | Extract | `extractor.py` | PDF → clean, hierarchical Markdown (+ page count, headings). Prefers PyMuPDF, falls back to pdfplumber. No OCR/CV required. |
 | Generate | `generator.py` + `prompts.py` | Extracted content → template dict via a frontier LLM in JSON mode. Backend is injectable for testing. |
+| Normalize | `normalize.py` | Best-effort repair of small, mechanically-fixable LLM quirks (out-of-range numbers like `max_images`, `capture_order` gaps, unknown `document_class`, empty `suggested_phrases`) before validation. Never invents structure or masks real errors. |
 | Validate | `validator.py` + `schema.py` | Strict Pydantic v2 models + section-mirroring / quality checks with human-readable errors. |
-| Orchestrate | `pipeline.py` | `extract → generate → validate`. **Never returns an invalid template.** |
+| Orchestrate | `pipeline.py` | `extract → generate → normalize → validate`. **Never returns an invalid template.** |
 | Interfaces | `cli.py`, `api.py` | Typer CLI and FastAPI service. |
 
 ---
@@ -275,7 +276,7 @@ The schema and validator tests run **without an API key** (the pipeline test use
 a fake LLM completer):
 
 ```bash
-pytest            # 31 tests, all offline (schema, validator, pipeline, API, UI)
+pytest            # 41 tests, all offline (schema, validator, normalize, pipeline, API, UI)
 ```
 
 Project layout:
@@ -287,8 +288,9 @@ Project layout:
 │   ├── extractor.py    # PDF → clean intermediate content
 │   ├── prompts.py      # System prompt + few-shot + prompt assembly
 │   ├── generator.py    # Intermediate → template dict (LLM reasoning)
+│   ├── normalize.py    # Repair small LLM quirks before validation
 │   ├── validator.py    # Strict validation + mirroring/quality checks
-│   ├── pipeline.py     # extract → generate → validate
+│   ├── pipeline.py     # extract → generate → normalize → validate
 │   ├── cli.py          # Typer CLI
 │   ├── api.py          # FastAPI app (serves the UI + JSON API)
 │   └── static/index.html  # Self-contained browser UI

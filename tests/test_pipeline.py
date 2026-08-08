@@ -66,6 +66,16 @@ def test_pipeline_end_to_end_with_fake(sample_pdf):
     assert "Roof Condition" in (completer.last_user or "")
 
 
+def test_pipeline_repairs_max_images_zero(sample_pdf):
+    payload = make_valid_template()
+    payload["content_structure"]["sections"][0]["image_placement"]["max_images"] = 0
+    completer = FakeCompleter(payload=payload)
+    pipeline = TranslationPipeline(completer=completer)
+    result = pipeline.run(sample_pdf)
+    # Normalization clamps 0 -> 1 so the template validates and is returned.
+    assert result.template.content_structure.sections[0].image_placement.max_images == 1
+
+
 def test_pipeline_raises_on_invalid_generation(sample_pdf):
     bad = make_valid_template()
     del bad["guidance"]  # make it invalid
