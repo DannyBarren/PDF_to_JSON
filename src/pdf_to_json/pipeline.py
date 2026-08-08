@@ -7,7 +7,7 @@ It guarantees that the returned object is always a fully validated
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -15,7 +15,11 @@ from .extractor import ExtractedDocument, ExtractionError, extract_pdf
 from .generator import ChatCompleter, GenerationError, TemplateGenerator
 from .normalize import normalize_template
 from .schema import ReportTemplate
-from .validator import TemplateValidationError, validate_template
+from .validator import (
+    TemplateValidationError,
+    quality_warnings,
+    validate_template,
+)
 
 __all__ = ["PipelineError", "PipelineResult", "translate_pdf", "TranslationPipeline"]
 
@@ -29,6 +33,7 @@ class PipelineResult:
     template: ReportTemplate
     document: ExtractedDocument
     raw_generation: dict[str, Any]
+    warnings: list[str] = field(default_factory=list)
 
     @property
     def json(self) -> str:
@@ -62,8 +67,9 @@ class TranslationPipeline:
         except GenerationError as exc:
             raise PipelineError(f"Generation failed: {exc}") from exc
 
-        # 3. Normalize small, mechanically-fixable quirks, then validate
-        #    (validation is still the authoritative, final gate).
+        # 3. Normalize small, mechanically-fixable quirks, then validate the
+        #    hard contract (schema, mirroring, severity). Quality issues are
+        #    collected as non-fatal warnings and never block delivery.
         repaired = normalize_template(raw)
         try:
             template = validate_template(repaired)
@@ -75,8 +81,12 @@ class TranslationPipeline:
                 "may be too sparse or unusual."
             ) from exc
 
+        warnings = quality_warnings(template)
         return PipelineResult(
-            template=template, document=document, raw_generation=raw
+            template=template,
+            document=document,
+            raw_generation=raw,
+            warnings=warnings,
         )
 
 

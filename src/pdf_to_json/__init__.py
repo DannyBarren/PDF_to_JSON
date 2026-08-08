@@ -19,7 +19,11 @@ from .schema import (
     ReportTemplate,
 )
 from .normalize import normalize_template
-from .validator import TemplateValidationError, validate_template
+from .validator import (
+    TemplateValidationError,
+    quality_warnings,
+    validate_template,
+)
 
 __version__ = "0.1.0"
 
@@ -35,6 +39,7 @@ __all__ = [
     "ImagePlacement",
     "LayoutHints",
     "validate_template",
+    "quality_warnings",
     "TemplateValidationError",
     "normalize_template",
 ]

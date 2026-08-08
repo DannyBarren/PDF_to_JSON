@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import pytest
 
-from pdf_to_json.validator import TemplateValidationError, validate_template
+from pdf_to_json.validator import (
+    TemplateValidationError,
+    quality_warnings,
+    validate_template,
+)
 
 
 def test_validate_good_template(valid_template):
@@ -26,20 +30,19 @@ def test_missing_field_gives_readable_error(clone_valid_template):
     assert "template_description" in str(exc.value)
 
 
-def test_low_min_summary_words_flagged(clone_valid_template):
+def test_low_min_summary_words_is_a_warning_not_error(clone_valid_template):
     data = clone_valid_template()
     data["content_structure"]["sections"][0]["min_summary_words"] = 5
-    with pytest.raises(TemplateValidationError) as exc:
-        validate_template(data)
-    assert "min_summary_words" in str(exc.value)
+    # Valid template: should NOT raise, but should be flagged as a warning.
+    template = validate_template(data)
+    assert any("min_summary_words" in w for w in quality_warnings(template))
 
 
-def test_short_writer_instructions_flagged(clone_valid_template):
+def test_short_writer_instructions_is_a_warning_not_error(clone_valid_template):
     data = clone_valid_template()
     data["content_structure"]["sections"][0]["writer_instructions"] = "Write it well."
-    with pytest.raises(TemplateValidationError) as exc:
-        validate_template(data)
-    assert "writer_instructions" in str(exc.value)
+    template = validate_template(data)
+    assert any("writer_instructions" in w for w in quality_warnings(template))
 
 
 def test_non_gold_severity_keys_rejected(clone_valid_template):
@@ -52,12 +55,11 @@ def test_non_gold_severity_keys_rejected(clone_valid_template):
     assert "severity" in str(exc.value).lower()
 
 
-def test_short_worker_instructions_rejected(clone_valid_template):
+def test_short_worker_instructions_is_a_warning_not_error(clone_valid_template):
     data = clone_valid_template()
     data["guidance"]["sections"][0]["worker_instructions"] = "Check the roof."
-    with pytest.raises(TemplateValidationError) as exc:
-        validate_template(data)
-    assert "worker_instructions" in str(exc.value)
+    template = validate_template(data)
+    assert any("worker_instructions" in w for w in quality_warnings(template))
 
 
 def test_photoless_success_criteria_accepted(clone_valid_template):
@@ -74,20 +76,30 @@ def test_photoless_success_criteria_accepted(clone_valid_template):
     validate_template(data)
 
 
-def test_short_success_criteria_still_rejected(clone_valid_template):
+def test_short_success_criteria_is_a_warning_not_error(clone_valid_template):
     data = clone_valid_template()
     data["guidance"]["sections"][0]["success_criteria"] = "Looks fine."
-    with pytest.raises(TemplateValidationError) as exc:
-        validate_template(data)
-    assert "success_criteria" in str(exc.value)
+    template = validate_template(data)
+    assert any("success_criteria" in w for w in quality_warnings(template))
 
 
-def test_too_few_suggested_phrases_rejected(clone_valid_template):
+def test_thin_general_information_section_does_not_block(clone_valid_template):
+    # Regression guard for the reported failure: a terse general_information
+    # section must NOT block an otherwise valid template.
+    data = clone_valid_template()
+    data["guidance"]["sections"][0]["section_id"] = "general_information"
+    data["content_structure"]["sections"][0]["section_id"] = "general_information"
+    data["guidance"]["sections"][0]["success_criteria"] = "Details recorded."
+    data["content_structure"]["sections"][0]["writer_instructions"] = "State the job details."
+    template = validate_template(data)  # must not raise
+    assert template.report_type
+
+
+def test_too_few_suggested_phrases_is_a_warning_not_error(clone_valid_template):
     data = clone_valid_template()
     data["guidance"]["sections"][0]["suggested_phrases"] = ["only one phrase"]
-    with pytest.raises(TemplateValidationError) as exc:
-        validate_template(data)
-    assert "suggested_phrases" in str(exc.value)
+    template = validate_template(data)
+    assert any("suggested_phrase" in w for w in quality_warnings(template))
 
 
 def test_mirroring_error_is_readable(clone_valid_template):

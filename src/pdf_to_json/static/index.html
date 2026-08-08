@@ -147,6 +147,10 @@
     .banner { display: none; margin-top: 18px; padding: 14px 16px; border-radius: var(--radius-sm); font-size: .92rem; }
     .banner.show { display: block; }
     .banner.error { background: rgba(248,113,113,.10); border: 1px solid rgba(248,113,113,.4); color: #fecaca; white-space: pre-wrap; }
+    .banner.warn { background: rgba(217,119,6,.10); border: 1px solid rgba(217,119,6,.4); color: #fcd34d; }
+    .banner.warn .whead { font-weight: 700; margin-bottom: 6px; }
+    .banner.warn ul { margin: 0; padding-left: 18px; }
+    .banner.warn li { margin: 2px 0; }
 
     /* Results */
     #results { display: none; }
@@ -281,6 +285,7 @@
       </div>
 
       <div class="banner error" id="errorBanner"></div>
+      <div class="banner warn" id="warnBanner"></div>
     </section>
 
     <!-- Results card -->
@@ -432,6 +437,7 @@
     async function translate() {
       if (!selectedFile) return;
       hideError();
+      $('warnBanner').classList.remove('show');
       $('results').classList.remove('show');
       $('translateBtn').disabled = true;
       $('status').classList.add('show');
@@ -457,7 +463,10 @@
           return;
         }
         lastTemplate = payload;
+        let warnings = [];
+        try { warnings = JSON.parse(r.headers.get('X-Quality-Warnings') || '[]'); } catch (e) { warnings = []; }
         renderResults(payload);
+        showWarnings(warnings);
       } catch (e) {
         clearInterval(timer);
         showError('Network error: ' + e.message);
@@ -583,6 +592,15 @@
       b.classList.add('show');
     }
     function hideError() { $('errorBanner').classList.remove('show'); }
+
+    function showWarnings(warnings) {
+      const b = $('warnBanner');
+      if (!warnings || !warnings.length) { b.classList.remove('show'); b.innerHTML = ''; return; }
+      const items = warnings.map((w) => `<li>${esc(w)}</li>`).join('');
+      b.innerHTML =
+        `<div class="whead">Template is valid and ready to use — ${warnings.length} optional quality suggestion(s):</div><ul>${items}</ul>`;
+      b.classList.add('show');
+    }
 
     let toastTimer;
     function toast(msg) {

@@ -1,11 +1,20 @@
 """Strict validation for generated ReportTemplate payloads.
 
 This is the last line of defense before a template is returned to a caller.
-The pipeline MUST run this and MUST refuse to return an invalid template.
+The pipeline MUST run this and MUST refuse to return a structurally invalid
+template.
 
-The public entry point is :func:`validate_template`, which loads a plain dict
-into the strict Pydantic model and raises a :class:`TemplateValidationError`
-with clear, human-readable messages when anything is wrong.
+There are two tiers of checks:
+
+* **Hard errors** (raise :class:`TemplateValidationError`) — anything that makes
+  the template an invalid ReportTemplate or breaks the JobDoc contract: wrong
+  types, empty required fields, broken section_id mirroring, incomplete
+  capture_order, or non-gold severity vocabulary.
+* **Quality warnings** (returned, never raised) — advisory suggestions such as
+  thin ``worker_instructions`` or a short ``success_criteria``. These are
+  surfaced to the caller but MUST NOT block delivery of an otherwise valid
+  template. The prompt is what primarily drives writing quality; validation only
+  *flags* soft issues (see :func:`quality_warnings`).
 """
 
 from __future__ import annotations
@@ -16,7 +25,12 @@ from pydantic import ValidationError
 
 from .schema import SEVERITY_LEVELS, ReportTemplate
 
-__all__ = ["TemplateValidationError", "validate_template", "format_validation_error"]
+__all__ = [
+    "TemplateValidationError",
+    "validate_template",
+    "quality_warnings",
+    "format_validation_error",
+]
 
 
 class TemplateValidationError(Exception):
@@ -65,27 +79,26 @@ def validate_template(data: dict[str, Any]) -> ReportTemplate:
     except ValidationError as exc:
         raise TemplateValidationError(format_validation_error(exc)) from exc
 
-    # Extra semantic checks beyond what the model validators cover. These give
-    # friendlier, product-focused messages than raw pydantic errors.
-    problems = _semantic_checks(template)
+    # Hard, contractual checks beyond what the model validators cover. Only these
+    # can block delivery. Quality issues are surfaced separately as warnings.
+    problems = _hard_checks(template)
     if problems:
         raise TemplateValidationError(problems)
 
     return template
 
 
-# Production-quality thresholds. These are deliberately objective, low bars that
-# any genuine day-one instruction clears; only vague one-liners fail. We rely on
-# length/count (not fuzzy keyword matching) so we never reject a legitimately
-# worded criterion.
+# Advisory quality thresholds. These NEVER block a schema-valid template; they
+# only produce warnings. They are objective (length/count), so they don't reject
+# legitimately worded content.
 _MIN_WORKER_WORDS = 12
 _MIN_SUCCESS_WORDS = 8
 _MIN_WRITER_WORDS = 15
 _MIN_PHRASES = 3
 
 
-def _semantic_checks(template: ReportTemplate) -> list[str]:
-    """Product-quality checks that complement the structural model validators."""
+def _hard_checks(template: ReportTemplate) -> list[str]:
+    """Contractual checks that MUST hold for a valid, JobDoc-ready template."""
     problems: list[str] = []
 
     guidance_ids = [s.section_id for s in template.guidance.sections]
@@ -112,41 +125,46 @@ def _semantic_checks(template: ReportTemplate) -> list[str]:
                 f"{list(SEVERITY_LEVELS)} (do not use critical/high/medium/low/info)."
             )
 
-    # Quality bar: min_summary_words should be realistic (45-70 recommended).
+    return problems
+
+
+def quality_warnings(template: ReportTemplate) -> list[str]:
+    """Return advisory quality suggestions (never fatal).
+
+    These flag templates that are valid and usable but could be improved (thin
+    instructions, short success criteria, few phrases). Callers may surface them
+    but must still deliver the template.
+    """
+    warnings: list[str] = []
+
     for section in template.content_structure.sections:
         if section.min_summary_words < 20:
-            problems.append(
-                f"content_structure section '{section.section_id}' has "
-                f"min_summary_words={section.min_summary_words}; expected a "
-                "realistic value (>= 20, ideally 45-70)."
+            warnings.append(
+                f"content section '{section.section_id}': min_summary_words="
+                f"{section.min_summary_words} is low (ideal 45-70)."
             )
         if len(section.writer_instructions.split()) < _MIN_WRITER_WORDS:
-            problems.append(
-                f"content_structure section '{section.section_id}' "
-                "writer_instructions is too generic/short to guide the writing "
-                f"agent (needs >= {_MIN_WRITER_WORDS} words with specific, "
-                "binding direction)."
+            warnings.append(
+                f"content section '{section.section_id}': writer_instructions is "
+                "brief; consider more specific, binding direction for the writer."
             )
 
-    # Guidance sections must carry day-one-ready, checkable instructions.
     for section in template.guidance.sections:
         if len(section.worker_instructions.split()) < _MIN_WORKER_WORDS:
-            problems.append(
-                f"guidance section '{section.section_id}' worker_instructions is "
-                f"too short for a day-one technician (needs >= {_MIN_WORKER_WORDS} "
-                "words describing what to do, what to look for, and what to capture)."
+            warnings.append(
+                f"guidance section '{section.section_id}': worker_instructions is "
+                "brief; add concrete on-site steps for a day-one technician."
             )
         if len(section.success_criteria.split()) < _MIN_SUCCESS_WORDS:
-            problems.append(
-                f"guidance section '{section.section_id}' success_criteria is "
-                f"too short to be a checkable pass/fail condition (needs >= "
-                f"{_MIN_SUCCESS_WORDS} words)."
+            warnings.append(
+                f"guidance section '{section.section_id}': success_criteria is "
+                "brief; state a clearly checkable pass/fail condition."
             )
         phrases = [p for p in section.suggested_phrases if p.strip()]
         if len(phrases) < _MIN_PHRASES:
-            problems.append(
-                f"guidance section '{section.section_id}' needs >= {_MIN_PHRASES} "
-                "realistic, domain-specific suggested_phrases."
+            warnings.append(
+                f"guidance section '{section.section_id}': only {len(phrases)} "
+                "suggested_phrase(s); 3+ domain-specific phrases are recommended."
             )
 
-    return problems
+    return warnings

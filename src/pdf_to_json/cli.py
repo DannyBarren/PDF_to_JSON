@@ -75,6 +75,17 @@ def translate(
         # Template JSON goes to stdout so it can be piped/redirected cleanly.
         typer.echo(template_json)
 
+    # Advisory quality suggestions (non-fatal) go to stderr so they never
+    # corrupt the JSON on stdout.
+    if result.warnings:
+        typer.secho(
+            f"{len(result.warnings)} quality suggestion(s) (non-blocking):",
+            fg=typer.colors.YELLOW,
+            err=True,
+        )
+        for warning in result.warnings:
+            typer.secho(f"  · {warning}", fg=typer.colors.YELLOW, err=True)
+
 
 @app.command()
 def extract(

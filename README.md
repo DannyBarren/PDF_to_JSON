@@ -204,8 +204,10 @@ Enforced by [`src/pdf_to_json/schema.py`](src/pdf_to_json/schema.py). Hard rules
 - `capture_order` is a **complete sequential** `1..N` sequence.
 - All human-facing text fields are **non-empty**; `section_id` and `report_type`
   are snake_case; colors are valid hex.
-- `worker_instructions`, `success_criteria`, and `writer_instructions` must be
-  substantive (length-checked), and `min_summary_words` must be realistic.
+- Thin `worker_instructions` / `success_criteria` / `writer_instructions` or a
+  low `min_summary_words` are surfaced as **non-blocking quality warnings** (they
+  never reject a schema-valid template). The CLI prints them and the API returns
+  them in an `X-Quality-Warnings` header; the web UI shows them as an amber note.
 - **Severity uses the JobDoc gold-standard vocabulary only**:
   `informational | minor | moderate | major | safety_critical`
   (never `critical/high/medium/low/info`). Legacy vocabulary in model output is
@@ -223,7 +225,8 @@ The generator (prompt + few-shot + validation) is tuned so that:
   for (layman + trade term), what to physically do, what to photograph, what to
   say. Validation rejects vague one-liners.
 - **`success_criteria` are supervisor-checkable** — e.g. a minimum number of
-  photos plus a specific spoken confirmation. Soft criteria are rejected.
+  photos plus a specific spoken confirmation. Thin criteria are flagged as a
+  non-blocking warning rather than rejected, so a usable template is never lost.
 - **`suggested_phrases` use real domain language** drawn from the source (for
   roofing: ponding, blistering, gravel stop, flashing failure, soft decking,
   membrane split, open seam, scupper), including a "no defect" phrase.
@@ -320,7 +323,7 @@ The schema and validator tests run **without an API key** (the pipeline test use
 a fake LLM completer):
 
 ```bash
-pytest            # 63 tests, all offline (schema, validator, normalize, generator, pipeline, API, UI)
+pytest            # 66 tests, all offline (schema, validator, normalize, generator, pipeline, API, UI)
 ```
 
 Project layout:

@@ -15,6 +15,7 @@ Run in production (Render / Docker / Railway / Fly.io):
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import tempfile
@@ -114,11 +115,14 @@ app.add_middleware(
 _INDEX_HTML = _load_index_html()
 
 
+_NO_CACHE = {"Cache-Control": "no-store, max-age=0"}
+
+
 @app.get("/", response_class=HTMLResponse)
 def root() -> HTMLResponse:
     """Serve the browser UI (falls back to JSON info if the asset is missing)."""
     if _INDEX_HTML is not None:
-        return HTMLResponse(content=_INDEX_HTML)
+        return HTMLResponse(content=_INDEX_HTML, headers=_NO_CACHE)
     return HTMLResponse(
         content=(
             "<h1>PDF -> JSON Template Translator</h1>"
@@ -202,13 +206,25 @@ async def translate(file: UploadFile = File(...)) -> JSONResponse:
 
     elapsed = time.perf_counter() - started
     logger.info(
-        "translated %s -> %s (%d sections) in %.1fs",
+        "translated %s -> %s (%d sections, %d quality warnings) in %.1fs",
         filename,
         result.template.report_type,
         len(result.template.guidance.sections),
+        len(result.warnings),
         elapsed,
     )
-    return JSONResponse(content=result.template.model_dump(mode="json"))
+    if result.warnings:
+        logger.info("quality warnings for %s: %s", filename, result.warnings)
+
+    # The body stays a pure ReportTemplate (drop-in for JobDoc). Non-fatal
+    # quality suggestions are exposed via a header so clients can surface them.
+    headers = {
+        "X-Quality-Warnings": json.dumps(result.warnings)[:6000],
+        "Access-Control-Expose-Headers": "X-Quality-Warnings",
+    }
+    return JSONResponse(
+        content=result.template.model_dump(mode="json"), headers=headers
+    )
 
 
 @app.exception_handler(Exception)

@@ -57,17 +57,17 @@ def test_zero_estimated_seconds_is_fixed():
     assert repaired["guidance"]["sections"][0]["estimated_seconds"] >= 1
 
 
-def test_weak_suggested_phrases_are_not_masked():
-    from pdf_to_json.validator import TemplateValidationError
+def test_weak_suggested_phrases_are_cleaned_and_flagged():
+    from pdf_to_json.validator import quality_warnings
 
     data = make_valid_template()
     # Blank/duplicate phrases should be cleaned, not padded with filler...
     data["guidance"]["sections"][0]["suggested_phrases"] = ["ok", "  ", "ok"]
     repaired = normalize_template(data)
     assert repaired["guidance"]["sections"][0]["suggested_phrases"] == ["ok"]
-    # ...and the too-thin set must then be rejected by validation.
-    with pytest.raises(TemplateValidationError):
-        validate_template(repaired)
+    # ...and the too-thin set is flagged as a (non-fatal) warning, not rejected.
+    template = validate_template(repaired)
+    assert any("suggested_phrase" in w for w in quality_warnings(template))
 
 
 def test_unknown_document_class_falls_back_to_custom():
