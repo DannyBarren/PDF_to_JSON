@@ -206,9 +206,35 @@ Enforced by [`src/pdf_to_json/schema.py`](src/pdf_to_json/schema.py). Hard rules
   are snake_case; colors are valid hex.
 - `worker_instructions`, `success_criteria`, and `writer_instructions` must be
   substantive (length-checked), and `min_summary_words` must be realistic.
+- **Severity uses the JobDoc gold-standard vocabulary only**:
+  `informational | minor | moderate | major | safety_critical`
+  (never `critical/high/medium/low/info`). Legacy vocabulary in model output is
+  auto-mapped to the gold standard during normalization.
 
 See the full annotated shape in the schema module and a real example in
 [`examples/sample_output.json`](examples/sample_output.json).
+
+### Production quality bar for generated templates
+
+The generator (prompt + few-shot + validation) is tuned so that:
+
+- **A day-one technician can complete the whole capture from the guidance alone.**
+  `worker_instructions` give concrete on-site steps — where to stand, what to look
+  for (layman + trade term), what to physically do, what to photograph, what to
+  say. Validation rejects vague one-liners.
+- **`success_criteria` are supervisor-checkable** — e.g. a minimum number of
+  photos plus a specific spoken confirmation. Soft criteria are rejected.
+- **`suggested_phrases` use real domain language** drawn from the source (for
+  roofing: ponding, blistering, gravel stop, flashing failure, soft decking,
+  membrane split, open seam, scupper), including a "no defect" phrase.
+- **`writer_instructions` force location-specific findings** and clear
+  **recommend-replace vs recommend-maintain** language, with severity assigned
+  from the gold-standard set.
+- **Times/marks are realistic for mobile capture** (info ~60–120s, inspecting an
+  area/system ~150–300s).
+
+The committed [`examples/sample_output.json`](examples/sample_output.json) is a
+commercial low-slope roof inspection template that demonstrates this bar.
 
 ---
 
@@ -294,7 +320,7 @@ The schema and validator tests run **without an API key** (the pipeline test use
 a fake LLM completer):
 
 ```bash
-pytest            # 57 tests, all offline (schema, validator, normalize, generator, pipeline, API, UI)
+pytest            # 63 tests, all offline (schema, validator, normalize, generator, pipeline, API, UI)
 ```
 
 Project layout:

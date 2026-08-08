@@ -50,8 +50,8 @@ Return ONE JSON object (no markdown, no prose) with EXACTLY this shape:
     "disclaimer_text": "One or two sentences appropriate to this document type.",
     "show_photo_appendix": true,
     "section_page_break": "before",
-    "severity_colors": {"critical":"#dc2626","high":"#ea580c","medium":"#d97706","low":"#16a34a","info":"#2563eb"},
-    "severity_bands": {"critical":"Immediate action required","high":"Address promptly","medium":"Plan to repair","low":"Monitor","info":"Informational only"}
+    "severity_colors": {"informational":"#2563eb","minor":"#16a34a","moderate":"#d97706","major":"#ea580c","safety_critical":"#dc2626"},
+    "severity_bands": {"informational":"Informational only - no action required","minor":"Minor - monitor or address during routine maintenance","moderate":"Moderate - plan to repair","major":"Major - address promptly","safety_critical":"Safety-critical - immediate action required"}
   },
   "guidance": {
     "intro_script": "Spoken welcome that orients the technician to this job.",
@@ -102,59 +102,106 @@ Each ContentSection (mirror of the guidance section with the same section_id):
   "layout_hints": { "page_break_before": false, "callout_style": "severity_border" }
 }
 
+## SEVERITY VOCABULARY (JobDoc gold standard) — THIS IS LAW
+The ONLY severity values allowed ANYWHERE in the template (severity_colors keys,
+severity_bands keys, the "severity" field, and any severity wording inside
+writer_instructions) are exactly these five, least to most severe:
+  informational | minor | moderate | major | safety_critical
+NEVER use critical, high, medium, low, or info. Map any source-report severity
+onto this set (e.g. "immediate/safety hazard" -> safety_critical, "needs prompt
+repair" -> major, "plan to repair" -> moderate, "monitor/cosmetic" -> minor,
+"FYI" -> informational).
+
 ## HARD RULES
 - Every section_id in guidance.sections MUST appear in content_structure.sections and vice versa (perfect 1:1 mirroring, same ids).
 - capture_order must be a complete sequential sequence 1..N (no gaps, no duplicates).
 - Every numeric field must be within range: min_marks >= 0, estimated_seconds >= 1, min_summary_words 45-70, image_placement.max_images between 1 and 10 (never 0).
 - Order sections to follow the logical flow of the source PDF.
-- worker_instructions and success_criteria must be written for a brand-new technician: specific, actionable, verifiable. No vague filler.
-- writer_instructions must be specific to the section (not boilerplate). Reference the actual subject matter of the section.
-- suggested_phrases must sound like real spoken language from a technician on site.
-- default_text must read professionally and make clear when something was not observed.
 - Infer document_class correctly from the content (inspection_report, estimate, invoice, compliance, work_order, or custom).
 - Keep section count reasonable (usually 6-12). Merge trivial items; split only when clearly distinct.
 - NEVER invent section structure that cannot be reasonably justified from the source PDF. Base sections on the document's real headings/topics.
 - Always begin with a "General Information / Site & Job Details" style section and end with a "Summary & Recommendations" style section when appropriate for the document type.
 
+## PRODUCTION QUALITY BAR (this is what separates good from unusable)
+A brand-new technician must be able to complete the whole capture using ONLY your
+guidance, and the JobDoc writing agent must be able to produce accurate,
+location-specific content from your writer_instructions.
+
+worker_instructions — write for someone on their FIRST day:
+  BAD:  "Examine the south roof for bald areas, gravel issues, and any deterioration."
+  GOOD: "Start at the south edge and walk the field in overlapping passes. Look for
+         standing water or dark staining (ponding), raised bubbles (blistering), and
+         spots worn down to the black felt (bald). Press each suspect area with your
+         foot and say whether it feels solid or soft. Take a close-up of every defect
+         with your hand in frame for scale, then one wide shot showing its location."
+  -> Say exactly where to stand/go, what to look for (with the layman + trade term),
+     what to physically do, what to photograph, and what to say out loud.
+
+success_criteria — must be a concrete pass/fail a supervisor can verify:
+  BAD:  "Photos and notes of all identified issues are captured."
+  GOOD: "At least two close-up photos of the worst defects plus one wide context
+         shot, and a spoken statement of the defect type and whether the decking
+         felt solid or soft — or an explicit spoken 'no defects found here'."
+  -> Include minimum photo counts and the specific spoken confirmation required.
+
+suggested_phrases — real spoken language, using the DOMAIN TERMS found in the
+  source document (for roofing e.g.: ponding, blistering, gravel stop, flashing
+  failure, soft/spongy decking, membrane split, open seam, pitch pocket, scupper,
+  granule loss). 4-6 phrases. Include one "no defect" phrase.
+
+writer_instructions — bind the writing agent to:
+  - Use the technician's SPECIFIC locations (e.g. "~10 ft in from the south parapet"),
+    never vague generalities.
+  - Name each observed defect type explicitly.
+  - Assign a JobDoc severity (informational..safety_critical).
+  - Use clear RECOMMEND-REPLACE vs RECOMMEND-MAINTAIN language when the source
+    supports it: widespread ponding / soft decking / splits -> recommend replacement
+    of the affected area; isolated, cosmetic issues -> recommend targeted maintenance.
+  - Never soften a safety_critical finding; never invent findings not captured.
+
+estimated_seconds / min_marks — realistic for MOBILE guided capture:
+  - Simple info section: 60-120s, min_marks 1.
+  - Walking/inspecting a roof area or system: 150-300s, min_marks 2-3.
+  - Do not exceed ~360s for a single section; split instead.
+
 ## STYLE
-- Write in clear, confident, professional English.
-- Keep voice_prompts short enough to be spoken aloud.
-- Make min_summary_words realistic (45-70).
+- Clear, confident, professional English. Voice_prompts short enough to speak aloud.
+- min_summary_words realistic (45-70).
 
 Return ONLY the JSON object.
 """
 
 
 FEW_SHOT_EXAMPLE = """\
-## EXAMPLE of ONE excellent mirrored section pair (for style reference only — do NOT copy verbatim)
+## EXAMPLE of ONE production-quality mirrored section pair (style reference only — do NOT copy verbatim; adapt to the actual source document)
 
 guidance section:
 {
-  "section_id": "electrical_panel",
-  "title": "Electrical Panel & Service",
-  "capture_order": 4,
+  "section_id": "field_membrane_south",
+  "title": "South Roof Field - Membrane & Surface",
+  "capture_order": 3,
   "required": true,
-  "min_marks": 1,
-  "voice_prompt": "Open the main electrical panel. Read the panel rating out loud, then slowly pan across the breakers so we capture any double-taps, rust, or scorching.",
-  "on_screen_text": "Electrical panel",
-  "worker_instructions": "Locate the main service panel (usually a gray metal box in the garage, basement, or exterior wall). Remove the cover only if you are trained and it is safe. Photograph the full panel with the door open, then close-ups of the label showing amperage and of any breaker that looks damaged, rusty, or has two wires under one screw. Say what you see as you go.",
-  "success_criteria": "At least one clear photo of the open panel plus a spoken note of the service amperage. Any visible defect (double-tap, corrosion, scorch mark, missing filler) is photographed and described, or the technician states none were found.",
-  "suggested_phrases": ["This is a 200 amp panel", "I see a double-tapped breaker here", "There's some rust on the bottom left", "No obvious defects in the panel"],
-  "estimated_seconds": 150
+  "min_marks": 2,
+  "voice_prompt": "Walk the south roof field slowly. Call out any ponding, blistering, or bald spots as you find them and hold the camera on each one for a few seconds.",
+  "on_screen_text": "South field: membrane & surface",
+  "worker_instructions": "Start at the south edge and walk the whole field in overlapping passes so you cover every square foot. Look for standing water or dark water-staining (ponding), raised bubbles in the membrane (blistering), and areas worn down to the black felt where the gravel or granule surfacing is gone (bald spots), plus any splits or open seams. Press each suspect area firmly with your foot and say out loud whether it feels solid or soft/spongy. Take a close-up photo of every defect with your hand or a tape in frame for scale, then one wide shot showing where that defect sits on the roof.",
+  "success_criteria": "At least two close-up photos of the worst defects plus one wide context shot, and for each defect a spoken statement of its type (ponding / blistering / bald / split) and whether the decking underneath felt solid or soft. If the field is sound, an explicit spoken 'no defects found on the south field'.",
+  "suggested_phrases": ["There's ponding about ten feet in from the south edge", "This whole area is blistered and worn down to the felt", "I've got a membrane split running along this seam", "The decking feels soft and spongy right here", "Surfacing is bald but the decking underneath feels solid", "No defects found on the south field"],
+  "estimated_seconds": 210
 }
 
 content section:
 {
-  "section_id": "electrical_panel",
-  "title": "Electrical Panel & Service",
-  "default_text": "The main electrical panel was not accessible or was not assessed during this inspection.",
-  "fields": ["service_rating","panel_condition","observed_defects","recommendations","severity"],
-  "writer_instructions": "Summarize the service rating (amperage) and overall panel condition. List each observed defect (double-taps, corrosion, scorching, missing fillers, improper wiring) with its location and severity. Recommend evaluation by a licensed electrician for any safety defect. Do not speculate about hidden wiring. If no defects were captured, state that no visible deficiencies were observed.",
+  "section_id": "field_membrane_south",
+  "title": "South Roof Field - Membrane & Surface",
+  "default_text": "The south roof field membrane and surface were not accessible or were not assessed during this inspection.",
+  "fields": ["location","observed_conditions","decking_condition","severity","recommendation"],
+  "writer_instructions": "Describe the south field membrane using the technician's SPECIFIC locations (e.g. 'approximately 10 ft in from the south parapet'), never vague generalities. Name every defect type observed (ponding, blistering, bald/worn surfacing, membrane split, open seam) and tie each to what the technician felt underfoot. Assign a JobDoc severity (informational, minor, moderate, major, safety_critical) to the field's overall condition. If the technician reported soft/spongy decking, widespread ponding, or splits, state clearly that REPLACEMENT of the affected area is recommended; if defects are isolated and cosmetic (e.g. surface granule loss over solid decking), recommend targeted MAINTENANCE/repair instead. Do not generalize to other roof areas, do not invent findings that were not captured, and never soften a safety_critical condition.",
   "tone": "professional neutral",
-  "min_summary_words": 60,
+  "min_summary_words": 65,
   "show_photo": true,
   "show_severity_badge": true,
-  "image_placement": {"required": true, "position": "after_summary", "caption_style": "narration_excerpt_with_timestamp", "max_images": 4},
+  "image_placement": {"required": true, "position": "after_summary", "caption_style": "narration_excerpt_with_timestamp", "max_images": 6},
   "layout_hints": {"page_break_before": false, "callout_style": "severity_border"}
 }
 """

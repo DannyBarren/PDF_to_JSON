@@ -14,7 +14,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from .schema import ReportTemplate
+from .schema import SEVERITY_LEVELS, ReportTemplate
 
 __all__ = ["TemplateValidationError", "validate_template", "format_validation_error"]
 
@@ -74,6 +74,33 @@ def validate_template(data: dict[str, Any]) -> ReportTemplate:
     return template
 
 
+# Production-quality thresholds. These are deliberately low bars that any
+# genuine day-one instruction clears; only vague one-liners fail.
+_MIN_WORKER_WORDS = 12
+_MIN_SUCCESS_WORDS = 8
+_MIN_WRITER_WORDS = 15
+_MIN_PHRASES = 3
+
+# Words that make a success_criterion actually checkable by a supervisor.
+_CHECKABLE_HINTS = (
+    "photo",
+    "photos",
+    "image",
+    "images",
+    "video",
+    "least",
+    "confirm",
+    "state",
+    "stated",
+    "spoken",
+    "record",
+    "recorded",
+    "note",
+    "measurement",
+    "reading",
+)
+
+
 def _semantic_checks(template: ReportTemplate) -> list[str]:
     """Product-quality checks that complement the structural model validators."""
     problems: list[str] = []
@@ -88,6 +115,20 @@ def _semantic_checks(template: ReportTemplate) -> list[str]:
             f"guidance={sorted(guidance_ids)} content={sorted(content_ids)}"
         )
 
+    # Severity vocabulary MUST use the JobDoc gold standard only.
+    gold = set(SEVERITY_LEVELS)
+    for map_name, mapping in (
+        ("severity_colors", template.pdf_styling.severity_colors),
+        ("severity_bands", template.pdf_styling.severity_bands),
+    ):
+        illegal = [k for k in mapping if k not in gold]
+        if illegal:
+            problems.append(
+                f"pdf_styling.{map_name} uses non-gold severity keys "
+                f"{sorted(illegal)}. Allowed values are exactly: "
+                f"{list(SEVERITY_LEVELS)} (do not use critical/high/medium/low/info)."
+            )
+
     # Quality bar: min_summary_words should be realistic (45-70 recommended).
     for section in template.content_structure.sections:
         if section.min_summary_words < 20:
@@ -96,25 +137,39 @@ def _semantic_checks(template: ReportTemplate) -> list[str]:
                 f"min_summary_words={section.min_summary_words}; expected a "
                 "realistic value (>= 20, ideally 45-70)."
             )
-
-    # Guidance sections should each carry meaningful instructions (length check).
-    for section in template.guidance.sections:
-        if len(section.worker_instructions.split()) < 4:
-            problems.append(
-                f"guidance section '{section.section_id}' worker_instructions is "
-                "too short to be useful for a day-one technician."
-            )
-        if len(section.success_criteria.split()) < 3:
-            problems.append(
-                f"guidance section '{section.section_id}' success_criteria is "
-                "too short to be a checkable pass/fail condition."
-            )
-
-    for section in template.content_structure.sections:
-        if len(section.writer_instructions.split()) < 5:
+        if len(section.writer_instructions.split()) < _MIN_WRITER_WORDS:
             problems.append(
                 f"content_structure section '{section.section_id}' "
-                "writer_instructions is too generic/short to guide the writing agent."
+                "writer_instructions is too generic/short to guide the writing "
+                f"agent (needs >= {_MIN_WRITER_WORDS} words with specific, "
+                "binding direction)."
+            )
+
+    # Guidance sections must carry day-one-ready, checkable instructions.
+    for section in template.guidance.sections:
+        if len(section.worker_instructions.split()) < _MIN_WORKER_WORDS:
+            problems.append(
+                f"guidance section '{section.section_id}' worker_instructions is "
+                f"too short for a day-one technician (needs >= {_MIN_WORKER_WORDS} "
+                "words describing what to do, what to look for, and what to capture)."
+            )
+        success = section.success_criteria
+        if len(success.split()) < _MIN_SUCCESS_WORDS:
+            problems.append(
+                f"guidance section '{section.section_id}' success_criteria is "
+                f"too short to be checkable (needs >= {_MIN_SUCCESS_WORDS} words)."
+            )
+        elif not any(hint in success.lower() for hint in _CHECKABLE_HINTS):
+            problems.append(
+                f"guidance section '{section.section_id}' success_criteria is not "
+                "concretely checkable; state a verifiable condition (e.g. a minimum "
+                "number of photos plus a spoken confirmation a supervisor can verify)."
+            )
+        phrases = [p for p in section.suggested_phrases if p.strip()]
+        if len(phrases) < _MIN_PHRASES:
+            problems.append(
+                f"guidance section '{section.section_id}' needs >= {_MIN_PHRASES} "
+                "realistic, domain-specific suggested_phrases."
             )
 
     return problems

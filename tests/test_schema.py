@@ -24,7 +24,13 @@ def test_defaults_fill_pdf_styling(valid_template):
     template = ReportTemplate.model_validate(valid_template)
     assert isinstance(template.pdf_styling, PdfStyling)
     assert template.pdf_styling.primary_color == "#1e3a8a"
-    assert "critical" in template.pdf_styling.severity_colors
+    assert set(template.pdf_styling.severity_colors) == {
+        "informational",
+        "minor",
+        "moderate",
+        "major",
+        "safety_critical",
+    }
 
 
 def test_mirroring_failure_rejected(clone_valid_template):

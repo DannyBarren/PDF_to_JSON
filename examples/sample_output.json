@@ -1,12 +1,12 @@
 {
   "schema_version": 3,
   "document_class": "inspection_report",
-  "report_type": "residential_hvac_maintenance_inspection",
-  "title": "Residential HVAC Maintenance & Inspection Report",
+  "report_type": "commercial_low_slope_roof_inspection",
+  "title": "Commercial Low-Slope Roof Inspection Report",
   "business_name": "",
   "logo_url": null,
   "job_address": "",
-  "template_description": "Guided capture workflow for a residential HVAC maintenance and inspection visit on a split-system heat pump.",
+  "template_description": "Guided capture workflow for a commercial low-slope (built-up / modified-bitumen) roof inspection, covering the roof fields, flashings, drainage, edge metal, and interior leak evidence.",
   "pdf_styling": {
     "primary_color": "#1e3a8a",
     "secondary_color": "#64748b",
@@ -25,150 +25,198 @@
     "show_photo_appendix": true,
     "section_page_break": "before",
     "severity_colors": {
-      "critical": "#dc2626",
-      "high": "#ea580c",
-      "medium": "#d97706",
-      "low": "#16a34a",
-      "info": "#2563eb"
+      "informational": "#2563eb",
+      "minor": "#16a34a",
+      "moderate": "#d97706",
+      "major": "#ea580c",
+      "safety_critical": "#dc2626"
     },
     "severity_bands": {
-      "critical": "Immediate action required",
-      "high": "Address promptly",
-      "medium": "Plan to repair",
-      "low": "Monitor",
-      "info": "Informational only"
+      "informational": "Informational only - no action required",
+      "minor": "Minor - monitor or address during routine maintenance",
+      "moderate": "Moderate - plan to repair",
+      "major": "Major - address promptly",
+      "safety_critical": "Safety-critical - immediate action required"
     }
   },
   "guidance": {
-    "intro_script": "Welcome. We're going to walk through this HVAC maintenance visit together, one system at a time. Take your time and describe what you see out loud — I'll turn it into the report.",
-    "outro_script": "That completes the HVAC inspection capture. Double-check that every required section has a photo and a spoken note, then submit.",
+    "intro_script": "Welcome. We're going to inspect this low-slope roof one area at a time - the fields, the flashings, the drains, the edges, and any leak evidence inside. Work safely, stay away from the edge, and just describe what you see and feel out loud. I'll turn it into the report.",
+    "outro_script": "That completes the roof capture. Make sure every required area has at least one photo and a spoken note, and that you called your overall recommendation - repair or replace - before you submit.",
     "identification_phrase": "Mark this.",
-    "estimated_total_minutes": 20,
+    "estimated_total_minutes": 30,
     "sections": [
       {
-        "section_id": "site_details",
+        "section_id": "site_job_details",
         "title": "Site & Job Details",
         "capture_order": 1,
         "required": true,
         "min_marks": 1,
-        "voice_prompt": "Start by confirming the customer, the address, and the system you're servicing. Read the system type, tonnage, and install year off the unit's data plate.",
+        "voice_prompt": "Start by confirming the property address and the roof system. Read the roof type, approximate size, and estimated age from your paperwork, and photograph the building front.",
         "on_screen_text": "Site & job details",
-        "worker_instructions": "Find the outdoor unit's data plate (a metal sticker on the side of the condenser). Say the customer name, service address, system type (for example 'split-system heat pump'), tonnage, and the year it was installed. Photograph the data plate so the details are on record.",
-        "success_criteria": "Customer name and address are stated, and a legible photo of the system data plate is captured showing model and tonnage.",
+        "worker_instructions": "Confirm and say the property address out loud. From your work order or a quick look at the roof, state the roof system type (for example gravel-surfaced built-up roof, modified bitumen, or single-ply TPO), the approximate square footage, and the estimated age in years. Take one photo of the building front and one of the point where you accessed the roof.",
+        "success_criteria": "The property address and roof system type are stated out loud, and at least one photo of the building and one of the roof access point are captured.",
         "suggested_phrases": [
-          "This is a 3-ton split-system heat pump",
-          "Installed in 2016",
-          "Customer is R. Alvarez at 482 Cedar Lane"
+          "This is a gravel-surfaced built-up roof",
+          "Roof is about six thousand five hundred square feet",
+          "Estimated eighteen years old",
+          "Address is 333 South Tamiami Trail",
+          "Accessed through the interior roof hatch"
         ],
         "estimated_seconds": 120
       },
       {
-        "section_id": "thermostat_controls",
-        "title": "Thermostat & Controls",
+        "section_id": "roof_access_overview",
+        "title": "Roof Access & General Overview",
         "capture_order": 2,
         "required": true,
-        "min_marks": 1,
-        "voice_prompt": "Go to the thermostat. Cycle it through heating and cooling and tell me whether the system responds and whether the schedule looks correct.",
-        "on_screen_text": "Thermostat & controls",
-        "worker_instructions": "At the thermostat, switch to cooling and then heating and wait to hear the system respond. Confirm the programmed schedule is active. Photograph the thermostat screen. Note any error codes or calibration issues you hear or see.",
-        "success_criteria": "Thermostat is shown responding to at least one mode change, a photo of the display is captured, and the technician states whether calibration/schedule are correct.",
+        "min_marks": 2,
+        "voice_prompt": "Once you're safely on the roof, give me a slow full pan of the whole roof and call out your first overall impression of its condition.",
+        "on_screen_text": "Access & overview",
+        "worker_instructions": "After reaching the roof safely, stand in one spot and slowly pan the camera 360 degrees so the whole roof is captured in one wide shot. Walk the perimeter first and note the general condition of the surfacing - is the gravel or granule surface intact or thin and worn. Say your overall first impression (good, fair, poor) and point out any obviously failed areas you can already see.",
+        "success_criteria": "One wide 360-degree pan of the roof is captured plus a spoken overall first impression (good / fair / poor), and any obviously failed areas are pointed out on camera.",
         "suggested_phrases": [
-          "Thermostat is calling for cooling",
-          "The schedule is active and correct",
-          "Display reads 72 degrees",
-          "No error codes"
+          "Gravel surfacing is thin across most of the roof",
+          "Overall this roof looks to be in poor condition",
+          "I can already see ponding in the middle",
+          "The surface looks fair near the edges",
+          "No obvious failures from here"
         ],
-        "estimated_seconds": 90
+        "estimated_seconds": 180
       },
       {
-        "section_id": "air_filter",
-        "title": "Air Filter",
+        "section_id": "field_membrane_south",
+        "title": "South Roof Field - Membrane & Surface",
         "capture_order": 3,
         "required": true,
-        "min_marks": 1,
-        "voice_prompt": "Pull the air filter. Read the size and MERV rating out loud and tell me how dirty it is.",
-        "on_screen_text": "Air filter",
-        "worker_instructions": "Locate and remove the return air filter. Read the printed size (for example 16x25x1) and MERV rating aloud. Hold it up to the light and describe how dirty it is. Photograph the filter face. Note if it needs replacement.",
-        "success_criteria": "Filter size and rating are stated, a photo of the filter is captured, and its condition (clean / dirty / needs replacement) is clearly described.",
+        "min_marks": 2,
+        "voice_prompt": "Walk the south roof field slowly. Call out any ponding, blistering, or bald spots as you find them and hold the camera on each one.",
+        "on_screen_text": "South field: membrane",
+        "worker_instructions": "Start at the south edge and walk the whole field in overlapping passes so you cover every square foot. Look for standing water or dark water-staining (ponding), raised bubbles in the membrane (blistering), and areas worn down to the black felt where the surfacing is gone (bald spots), plus any splits or open seams. Press each suspect area firmly with your foot and say whether it feels solid or soft/spongy. Take a close-up of every defect with your hand or a tape in frame for scale, then one wide shot showing where it sits.",
+        "success_criteria": "At least two close-up photos of the worst defects plus one wide context shot, and for each defect a spoken statement of its type (ponding / blistering / bald / split) and whether the decking felt solid or soft - or an explicit spoken 'no defects found on the south field'.",
         "suggested_phrases": [
-          "This is a 16 by 25 by 1 MERV 8",
-          "The filter is moderately dirty",
-          "Recommend replacing this filter",
-          "Filter is clean"
+          "There's ponding about ten feet in from the south parapet",
+          "This whole area is blistered and worn to the felt",
+          "I've got a membrane split running along this seam",
+          "The decking feels soft and spongy right here",
+          "Surfacing is bald but the decking feels solid",
+          "No defects found on the south field"
         ],
-        "estimated_seconds": 75
+        "estimated_seconds": 210
       },
       {
-        "section_id": "outdoor_condenser",
-        "title": "Outdoor Condenser Unit",
+        "section_id": "field_membrane_main",
+        "title": "Main Roof Field - Membrane & Ponding",
         "capture_order": 4,
         "required": true,
-        "min_marks": 1,
-        "voice_prompt": "Move to the outdoor condenser. Pan across the coil, the fan, and the refrigerant lines, and describe anything that looks off.",
-        "on_screen_text": "Outdoor condenser",
-        "worker_instructions": "At the outdoor unit, inspect the coil for debris or bent fins, watch the fan motor run, and check that the refrigerant lines are insulated. Slowly pan across the unit on camera and describe the condition of each part as you go.",
-        "success_criteria": "The coil, fan operation, and refrigerant line insulation are each shown on camera and described; any debris or damage is called out or the technician states none was found.",
+        "min_marks": 3,
+        "voice_prompt": "Now cover the main central field the same way. I especially want every ponding area and any seam splits photographed and pressed underfoot.",
+        "on_screen_text": "Main field: membrane",
+        "worker_instructions": "Walk the central field in overlapping passes. Wherever you see standing water or a dark ponding ring, stop, photograph it wide and close, and estimate how large the area is in feet. Follow every seam and look for splits or open laps; photograph each split with scale. Press ponding and split areas with your foot and state whether the decking feels solid or soft. Note how much of the field is affected (a small spot vs most of the field).",
+        "success_criteria": "Every ponding area and seam split in the main field is photographed close-up and wide, the approximate size of the affected area is stated, and the technician confirms out loud whether the decking felt solid or soft.",
         "suggested_phrases": [
-          "Coil has light debris",
-          "Fan motor runs smoothly",
-          "Refrigerant lines are insulated",
-          "No damage to the fins"
+          "Ponding covers most of the central field",
+          "This seam has split wide open here",
+          "The ponded area is roughly fifteen by twenty feet",
+          "Decking is soft across this whole section",
+          "Multiple splits along the laps",
+          "Central field decking still feels solid"
         ],
-        "estimated_seconds": 150
+        "estimated_seconds": 240
       },
       {
-        "section_id": "indoor_air_handler",
-        "title": "Indoor Air Handler & Coil",
+        "section_id": "flashings_penetrations",
+        "title": "Flashings, Penetrations & Curbs",
         "capture_order": 5,
         "required": true,
-        "min_marks": 1,
-        "voice_prompt": "Open up the indoor air handler. Show me the blower wheel, the evaporator coil, and the condensate drain, and tell me if the drain is flowing.",
-        "on_screen_text": "Air handler & coil",
-        "worker_instructions": "Access the indoor air handler. Inspect the blower wheel for dust buildup, check the evaporator coil for corrosion, and confirm the condensate drain is flowing freely. Photograph each and describe what you see.",
-        "success_criteria": "Blower wheel, evaporator coil, and condensate drain are each captured and described, and drain flow (flowing / blocked) is stated.",
+        "min_marks": 2,
+        "voice_prompt": "Check every flashing and penetration - base flashings, pitch pockets, and the HVAC curbs. Show me anything lifting, cracked, or open.",
+        "on_screen_text": "Flashings & penetrations",
+        "worker_instructions": "Go to each vertical transition and penetration: base flashings where the roof meets walls and curbs, pitch pockets around pipes, and the flashing around every rooftop HVAC unit. Look for flashing that is lifting, pulling away, cracked, or has open/unsealed laps, and for pitch pockets that are dried out or cracked. Photograph each defect close-up and say exactly which penetration or curb it is on. Gently tug lifting flashing to show whether it is loose.",
+        "success_criteria": "Each flashing/penetration defect is photographed close-up with a spoken note of exactly which curb or penetration it is on, and the technician states whether lifting flashing is loose - or explicitly confirms flashings are sound.",
         "suggested_phrases": [
-          "Blower wheel is clean",
-          "Condensate drain is flowing freely",
-          "No corrosion on the coil",
-          "Drain line is clear"
+          "Base flashing at the HVAC curb is lifting and loose",
+          "This pitch pocket is dried out and cracked",
+          "Flashing lap is open on the north curb",
+          "Sealant has failed around this pipe",
+          "All flashings here look sound and sealed"
         ],
-        "estimated_seconds": 150
+        "estimated_seconds": 210
       },
       {
-        "section_id": "electrical_safety",
-        "title": "Electrical & Safety",
+        "section_id": "drainage_system",
+        "title": "Drainage: Drains, Scuppers & Gutters",
         "capture_order": 6,
         "required": true,
-        "min_marks": 1,
-        "voice_prompt": "Check the electrical disconnect and controls. Confirm the disconnect is present and labeled, and that the contactor and capacitor are within spec.",
-        "on_screen_text": "Electrical & safety",
-        "worker_instructions": "Locate the electrical disconnect near the outdoor unit and confirm it is present and labeled. If trained and safe to do so, verify the contactor and capacitor readings are within spec. Photograph the disconnect and any readings. Never open live electrical components you are not trained to service.",
-        "success_criteria": "The disconnect is shown present and labeled, and the technician states whether the contactor/capacitor are within spec or notes any electrical concern.",
+        "min_marks": 2,
+        "voice_prompt": "Check every drain, scupper, and gutter. Tell me if water can actually get off this roof or if the drains are blocked.",
+        "on_screen_text": "Drainage",
+        "worker_instructions": "Locate each roof drain, scupper, and gutter. At each one, clear away loose gravel by hand if safe and look down the drain: is it open and flowing or packed with gravel and debris. Photograph each drain and the area around it, note any ponding that has formed because water cannot reach the drain, and check scuppers and gutters for rust, blockage, or separation. Say for each whether it is clear or blocked.",
+        "success_criteria": "Every drain and scupper is photographed and the technician states for each whether it is clear or blocked, and any ponding caused by a blocked drain is called out on camera.",
         "suggested_phrases": [
-          "Disconnect is present and labeled",
-          "Contactor is within spec",
-          "Capacitor reads within range",
-          "No electrical concerns"
+          "This interior drain is partially blocked with gravel",
+          "Water is ponding because it can't reach the drain",
+          "The scupper is rusted through",
+          "This drain is clear and flowing",
+          "Gutter has pulled away from the edge"
         ],
-        "estimated_seconds": 120
+        "estimated_seconds": 180
+      },
+      {
+        "section_id": "edge_metal_parapet",
+        "title": "Edge Metal, Gravel Stop & Parapet Coping",
+        "capture_order": 7,
+        "required": true,
+        "min_marks": 2,
+        "voice_prompt": "Walk the whole perimeter. Check the gravel stop, edge metal, and parapet coping for anything loose, lifted, or with open joints.",
+        "on_screen_text": "Edge metal & coping",
+        "worker_instructions": "Walk the entire roof edge (stay back from the edge and keep your footing). Inspect the gravel stop and edge metal for sections that are loose, lifted, or corroded, and check parapet coping caps for open joints, missing sealant, or gaps where water can get behind them. Push lightly on suspect edge metal to show if it is loose. Photograph each defect and say which side of the building (north/south/east/west) it is on.",
+        "success_criteria": "Loose or lifted edge metal and open coping joints are photographed with a spoken note of which building side they are on, and the technician confirms whether edge metal is loose - or states the perimeter is sound.",
+        "suggested_phrases": [
+          "Gravel stop is loose along the west edge",
+          "Coping joints are open on the north parapet",
+          "Edge metal has lifted here and water can get behind it",
+          "Sealant is missing at this coping joint",
+          "The east edge metal is secure"
+        ],
+        "estimated_seconds": 180
+      },
+      {
+        "section_id": "interior_leak_evidence",
+        "title": "Interior Leak Evidence & Ceiling Staining",
+        "capture_order": 8,
+        "required": true,
+        "min_marks": 1,
+        "voice_prompt": "Go inside under the areas that looked worst and check the ceiling for active leaks or staining. Match any stains to the roof area above.",
+        "on_screen_text": "Interior leak evidence",
+        "worker_instructions": "Go into the interior spaces below the roof areas that showed ponding or splits. Look up at the ceiling tiles, deck, and any exposed structure for water stains, active dripping, sagging tiles, or mold. For each stain, photograph it and say which roof area is directly above it (for example 'this is under the south field'). Touch a stained tile if safe and say whether it is dry or still damp.",
+        "success_criteria": "Any interior water staining is photographed with a spoken note of which roof area is directly above it and whether it is dry or still damp - or the technician explicitly states no interior leak evidence was found.",
+        "suggested_phrases": [
+          "Active water staining on the ceiling tiles under the south field",
+          "This tile is sagging and still damp",
+          "The stain lines up with the ponding above",
+          "No interior leak evidence in this area",
+          "There's mold starting on this ceiling tile"
+        ],
+        "estimated_seconds": 180
       },
       {
         "section_id": "summary_recommendations",
         "title": "Summary & Recommendations",
-        "capture_order": 7,
+        "capture_order": 9,
         "required": true,
         "min_marks": 1,
-        "voice_prompt": "Wrap up with your overall assessment. Summarize the system's condition and list any recommended repairs or follow-up work.",
+        "voice_prompt": "Wrap up with your overall verdict. Say clearly whether this roof needs targeted repairs or full replacement, and why.",
         "on_screen_text": "Summary & recommendations",
-        "worker_instructions": "Give a plain-language summary of how the system is running overall, then list every recommendation you made (for example replacing the filter or cleaning the coil) with a rough priority. Note anything the customer should schedule.",
-        "success_criteria": "A spoken overall assessment is recorded and every recommendation from the visit is listed with a priority the customer can act on.",
+        "worker_instructions": "Give a plain-language overall assessment of the roof's condition and its remaining service life. State your single clear recommendation - targeted repairs versus full replacement - and the main reasons (for example widespread ponding, soft decking, and active interior leaks point to replacement). List the highest-priority items a building owner should act on first. Do not introduce any problem you did not actually observe earlier.",
+        "success_criteria": "A spoken overall verdict is recorded with a clear repair-versus-replace recommendation and its main reasons, plus a prioritized list of the top items to address.",
         "suggested_phrases": [
-          "System is operating normally",
-          "Recommend replacing the air filter",
-          "Schedule a coil cleaning",
-          "No urgent repairs needed"
+          "Overall this roof is at the end of its service life",
+          "I'm recommending full replacement, not spot repairs",
+          "The widespread ponding and soft decking drive that call",
+          "Active interior leaks confirm the membrane has failed",
+          "First priority is protecting the interior from further water"
         ],
-        "estimated_seconds": 120
+        "estimated_seconds": 180
       }
     ]
   },
@@ -177,17 +225,17 @@
     "organization": "section_order",
     "sections": [
       {
-        "section_id": "site_details",
+        "section_id": "site_job_details",
         "title": "Site & Job Details",
-        "default_text": "System and site details were not recorded during this visit.",
+        "default_text": "The property and roof system details were not recorded during this inspection.",
         "fields": [
-          "customer",
-          "job_address",
-          "system_type",
-          "tonnage",
-          "install_year"
+          "property_address",
+          "roof_system_type",
+          "approx_square_footage",
+          "estimated_age",
+          "severity"
         ],
-        "writer_instructions": "State the customer, service address, and full system description (type, tonnage, install year) from the captured data plate. Keep it factual; do not assess condition here.",
+        "writer_instructions": "State the property address and full roof-system description (type, approximate square footage, estimated age) from the capture. Keep this section factual and do not assess condition here; reserve findings for the field sections. Assign an informational severity.",
         "tone": "professional neutral",
         "min_summary_words": 45,
         "show_photo": true,
@@ -204,17 +252,17 @@
         }
       },
       {
-        "section_id": "thermostat_controls",
-        "title": "Thermostat & Controls",
-        "default_text": "Thermostat operation was not assessed during this visit.",
+        "section_id": "roof_access_overview",
+        "title": "Roof Access & General Overview",
+        "default_text": "The overall roof condition was not assessed during this inspection.",
         "fields": [
-          "operation",
-          "calibration",
-          "schedule",
-          "findings",
-          "severity"
+          "access_method",
+          "overall_condition",
+          "surfacing_condition",
+          "severity",
+          "recommendation"
         ],
-        "writer_instructions": "Describe how the thermostat responded to mode changes and whether calibration and schedule are correct. Report any error codes verbatim and assign a severity to any fault.",
+        "writer_instructions": "Summarize the overall roof condition from the technician's 360 overview using their own words (good/fair/poor) and describe the state of the gravel or granule surfacing. Assign a JobDoc severity to the overall condition. Frame this as the high-level picture; specific defects belong in the field sections. If the overview shows widespread failure, note that the detailed sections support a replacement discussion.",
         "tone": "professional neutral",
         "min_summary_words": 55,
         "show_photo": true,
@@ -223,7 +271,7 @@
           "required": true,
           "position": "after_summary",
           "caption_style": "narration_excerpt_with_timestamp",
-          "max_images": 3
+          "max_images": 4
         },
         "layout_hints": {
           "page_break_before": false,
@@ -231,26 +279,26 @@
         }
       },
       {
-        "section_id": "air_filter",
-        "title": "Air Filter",
-        "default_text": "The air filter was not inspected during this visit.",
+        "section_id": "field_membrane_south",
+        "title": "South Roof Field - Membrane & Surface",
+        "default_text": "The south roof field membrane and surface were not accessible or were not assessed during this inspection.",
         "fields": [
-          "filter_size",
-          "merv_rating",
-          "condition",
-          "recommendation",
-          "severity"
+          "location",
+          "observed_conditions",
+          "decking_condition",
+          "severity",
+          "recommendation"
         ],
-        "writer_instructions": "Record the filter size and MERV rating, describe its condition, and give a clear replacement recommendation. Flag a dirty filter as at least low severity affecting efficiency.",
+        "writer_instructions": "Describe the south field using the technician's specific locations (e.g. 'about 10 ft in from the south parapet'). Name every defect observed (ponding, blistering, bald/worn surfacing, membrane split, open seam) and tie each to what was felt underfoot. Assign a JobDoc severity. If soft/spongy decking, widespread ponding, or splits were reported, state clearly that replacement of the affected area is recommended; if defects are isolated and cosmetic over solid decking, recommend targeted maintenance instead. Do not generalize to other areas.",
         "tone": "professional neutral",
-        "min_summary_words": 45,
+        "min_summary_words": 65,
         "show_photo": true,
         "show_severity_badge": true,
         "image_placement": {
           "required": true,
           "position": "after_summary",
           "caption_style": "narration_excerpt_with_timestamp",
-          "max_images": 3
+          "max_images": 6
         },
         "layout_hints": {
           "page_break_before": false,
@@ -258,18 +306,45 @@
         }
       },
       {
-        "section_id": "outdoor_condenser",
-        "title": "Outdoor Condenser Unit",
-        "default_text": "The outdoor condenser unit was not accessible or not assessed during this visit.",
+        "section_id": "field_membrane_main",
+        "title": "Main Roof Field - Membrane & Ponding",
+        "default_text": "The main roof field was not accessible or was not assessed during this inspection.",
         "fields": [
-          "coil_condition",
-          "fan_operation",
-          "refrigerant_lines",
-          "findings",
-          "recommendations",
-          "severity"
+          "location",
+          "ponding_extent",
+          "seam_condition",
+          "decking_condition",
+          "severity",
+          "recommendation"
         ],
-        "writer_instructions": "Summarize coil condition, fan operation, and refrigerant line insulation. List any debris, bent fins, or damage with location and severity, and recommend cleaning or repair where warranted.",
+        "writer_instructions": "Describe the main field ponding and seam condition using the technician's stated locations and approximate sizes. State how much of the field is affected. Name each defect (ponding, seam split, open lap) and tie it to the decking feel. Assign a JobDoc severity. Widespread ponding, soft decking, or multiple splits must be stated as evidence that full-area replacement is recommended; isolated issues over solid decking warrant targeted repair. Never soften a safety_critical condition.",
+        "tone": "professional neutral",
+        "min_summary_words": 65,
+        "show_photo": true,
+        "show_severity_badge": true,
+        "image_placement": {
+          "required": true,
+          "position": "after_summary",
+          "caption_style": "narration_excerpt_with_timestamp",
+          "max_images": 6
+        },
+        "layout_hints": {
+          "page_break_before": false,
+          "callout_style": "severity_border"
+        }
+      },
+      {
+        "section_id": "flashings_penetrations",
+        "title": "Flashings, Penetrations & Curbs",
+        "default_text": "Flashings, penetrations, and curbs were not accessible or were not assessed during this inspection.",
+        "fields": [
+          "location",
+          "flashing_condition",
+          "penetration_condition",
+          "severity",
+          "recommendation"
+        ],
+        "writer_instructions": "For each flashing, pitch pocket, and HVAC curb the technician inspected, describe the condition at its specific location (which curb/penetration). Name each defect (lifting/loose base flashing, cracked pitch pocket, open lap, failed sealant). Assign a JobDoc severity. Recommend re-flashing or resealing for isolated defects; where flashing failure is widespread or contributing to interior leaks, tie it into the replacement recommendation. Do not invent penetrations that were not inspected.",
         "tone": "professional neutral",
         "min_summary_words": 60,
         "show_photo": true,
@@ -278,7 +353,7 @@
           "required": true,
           "position": "after_summary",
           "caption_style": "narration_excerpt_with_timestamp",
-          "max_images": 3
+          "max_images": 5
         },
         "layout_hints": {
           "page_break_before": false,
@@ -286,18 +361,18 @@
         }
       },
       {
-        "section_id": "indoor_air_handler",
-        "title": "Indoor Air Handler & Coil",
-        "default_text": "The indoor air handler and coil were not accessible or not assessed during this visit.",
+        "section_id": "drainage_system",
+        "title": "Drainage: Drains, Scuppers & Gutters",
+        "default_text": "The roof drainage system was not accessible or was not assessed during this inspection.",
         "fields": [
-          "blower_condition",
-          "coil_condition",
-          "condensate_drain",
-          "findings",
-          "recommendations",
-          "severity"
+          "drain_condition",
+          "scupper_condition",
+          "gutter_condition",
+          "ponding_relationship",
+          "severity",
+          "recommendation"
         ],
-        "writer_instructions": "Describe the blower wheel and evaporator coil condition and confirm condensate drain flow. Call out any corrosion or blockage with severity and recommend corrective action.",
+        "writer_instructions": "For each drain, scupper, and gutter, state whether it was clear or blocked at its location. Explicitly connect any blocked drainage to the ponding observed in the fields (blocked drains that cause standing water). Assign a JobDoc severity. Recommend cleaning/clearing for simple blockages and repair/replacement for rusted-through or separated components. Reference the technician's specific locations; do not generalize.",
         "tone": "professional neutral",
         "min_summary_words": 60,
         "show_photo": true,
@@ -306,7 +381,7 @@
           "required": true,
           "position": "after_summary",
           "caption_style": "narration_excerpt_with_timestamp",
-          "max_images": 3
+          "max_images": 4
         },
         "layout_hints": {
           "page_break_before": false,
@@ -314,26 +389,54 @@
         }
       },
       {
-        "section_id": "electrical_safety",
-        "title": "Electrical & Safety",
-        "default_text": "Electrical components were not assessed during this visit.",
+        "section_id": "edge_metal_parapet",
+        "title": "Edge Metal, Gravel Stop & Parapet Coping",
+        "default_text": "Edge metal, gravel stop, and parapet coping were not accessible or were not assessed during this inspection.",
         "fields": [
-          "disconnect",
-          "contactor",
-          "capacitor",
-          "findings",
-          "severity"
+          "location",
+          "edge_metal_condition",
+          "coping_condition",
+          "severity",
+          "recommendation"
         ],
-        "writer_instructions": "Confirm the disconnect is present and labeled and report contactor/capacitor status. Treat any electrical safety defect as high or critical severity and recommend a licensed technician.",
+        "writer_instructions": "Describe the perimeter edge metal, gravel stop, and coping using the building side (north/south/east/west) the technician stated. Name each defect (loose/lifted edge metal, open coping joint, missing sealant, corrosion) and note where water can get behind the system. Assign a JobDoc severity. Recommend refastening/resealing for isolated edge defects; widespread edge failure supports the replacement recommendation. Do not soften a finding where water intrusion is likely.",
         "tone": "professional neutral",
-        "min_summary_words": 50,
+        "min_summary_words": 55,
         "show_photo": true,
         "show_severity_badge": true,
         "image_placement": {
           "required": true,
           "position": "after_summary",
           "caption_style": "narration_excerpt_with_timestamp",
-          "max_images": 3
+          "max_images": 4
+        },
+        "layout_hints": {
+          "page_break_before": false,
+          "callout_style": "severity_border"
+        }
+      },
+      {
+        "section_id": "interior_leak_evidence",
+        "title": "Interior Leak Evidence & Ceiling Staining",
+        "default_text": "The interior was not accessed and no interior leak evidence was assessed during this inspection.",
+        "fields": [
+          "location",
+          "staining_description",
+          "active_or_dry",
+          "roof_area_above",
+          "severity",
+          "recommendation"
+        ],
+        "writer_instructions": "Describe any interior water staining using the technician's location and, critically, the roof area directly above it (e.g. 'under the south field'). State whether each stain was dry or still damp. Assign a JobDoc severity - active/damp staining tied to a failed field is major or safety_critical. Make clear that confirmed active leaks strongly support full replacement and immediate interior protection. If no evidence was found, state that plainly.",
+        "tone": "professional neutral",
+        "min_summary_words": 55,
+        "show_photo": true,
+        "show_severity_badge": true,
+        "image_placement": {
+          "required": true,
+          "position": "after_summary",
+          "caption_style": "narration_excerpt_with_timestamp",
+          "max_images": 4
         },
         "layout_hints": {
           "page_break_before": false,
@@ -343,15 +446,17 @@
       {
         "section_id": "summary_recommendations",
         "title": "Summary & Recommendations",
-        "default_text": "No overall summary was recorded for this visit.",
+        "default_text": "No overall summary or recommendation was recorded for this inspection.",
         "fields": [
-          "overall_assessment",
-          "prioritized_recommendations",
-          "follow_up"
+          "overall_condition",
+          "remaining_service_life",
+          "primary_recommendation",
+          "prioritized_actions",
+          "severity"
         ],
-        "writer_instructions": "Provide a concise overall assessment of system health and a prioritized, actionable list of recommendations drawn from the section findings. Do not introduce issues not captured earlier.",
+        "writer_instructions": "Provide a concise overall assessment of roof condition and remaining service life, then give ONE clear primary recommendation: targeted repair or full replacement, with the specific findings that drive it (e.g. widespread ponding, soft decking, active interior leaks). Provide a prioritized action list for the owner. Assign the highest severity observed. Do not introduce any issue that was not captured in the sections above.",
         "tone": "professional neutral",
-        "min_summary_words": 60,
+        "min_summary_words": 65,
         "show_photo": false,
         "show_severity_badge": true,
         "image_placement": {

@@ -38,9 +38,38 @@ __all__ = [
     "ContentStructure",
     "ReportTemplate",
     "SCHEMA_VERSION",
+    "SEVERITY_LEVELS",
+    "DEFAULT_SEVERITY_COLORS",
+    "DEFAULT_SEVERITY_BANDS",
 ]
 
 SCHEMA_VERSION = 3
+
+# JobDoc gold-standard severity vocabulary. This is the ONLY allowed severity
+# vocabulary in generated templates (ordered least -> most severe).
+SEVERITY_LEVELS = (
+    "informational",
+    "minor",
+    "moderate",
+    "major",
+    "safety_critical",
+)
+
+DEFAULT_SEVERITY_COLORS = {
+    "informational": "#2563eb",
+    "minor": "#16a34a",
+    "moderate": "#d97706",
+    "major": "#ea580c",
+    "safety_critical": "#dc2626",
+}
+
+DEFAULT_SEVERITY_BANDS = {
+    "informational": "Informational only - no action required",
+    "minor": "Minor - monitor or address during routine maintenance",
+    "moderate": "Moderate - plan to repair",
+    "major": "Major - address promptly",
+    "safety_critical": "Safety-critical - immediate action required",
+}
 
 _SNAKE_CASE_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 _HEX_COLOR_RE = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
@@ -124,22 +153,10 @@ class PdfStyling(_StrictModel):
     show_photo_appendix: bool = True
     section_page_break: Literal["before", "after", "none"] = "before"
     severity_colors: dict[str, str] = Field(
-        default_factory=lambda: {
-            "critical": "#dc2626",
-            "high": "#ea580c",
-            "medium": "#d97706",
-            "low": "#16a34a",
-            "info": "#2563eb",
-        }
+        default_factory=lambda: dict(DEFAULT_SEVERITY_COLORS)
     )
     severity_bands: dict[str, str] = Field(
-        default_factory=lambda: {
-            "critical": "Immediate action required",
-            "high": "Address promptly",
-            "medium": "Plan to repair",
-            "low": "Monitor",
-            "info": "Informational only",
-        }
+        default_factory=lambda: dict(DEFAULT_SEVERITY_BANDS)
     )
 
     @field_validator("severity_colors")

@@ -19,19 +19,23 @@ def _guidance_section(section_id: str, order: int, title: str) -> dict[str, Any]
         "voice_prompt": f"Please capture the {title.lower()} now, describing what you see.",
         "on_screen_text": title,
         "worker_instructions": (
-            f"Walk to the {title.lower()} area, take clear photos, and describe "
-            "the condition out loud so the report captures every detail."
+            f"Walk to the {title.lower()} area and inspect it in overlapping "
+            "passes. Take a close-up photo of every defect with something for "
+            "scale, then one wide shot showing where it sits, and say out loud "
+            "what you see and whether the surface feels solid or soft."
         ),
         "success_criteria": (
-            "At least one clear photo and a spoken description of the current "
-            "condition are recorded."
+            "At least two clear photos of the worst defects plus a spoken "
+            "confirmation of the condition are recorded, or the technician "
+            "explicitly states no defects were found here."
         ),
         "suggested_phrases": [
-            "This looks in good condition",
-            "I see some damage here",
-            "No issues found",
+            "This area looks in good condition",
+            "I see some damage here on the surface",
+            "The material feels soft right here",
+            "No defects found in this area",
         ],
-        "estimated_seconds": 90,
+        "estimated_seconds": 150,
     }
 
 
@@ -42,8 +46,10 @@ def _content_section(section_id: str, title: str) -> dict[str, Any]:
         "default_text": f"The {title.lower()} was not observed during this visit.",
         "fields": ["condition_summary", "findings", "recommendations", "severity"],
         "writer_instructions": (
-            f"Summarize the observed condition of the {title.lower()}, list any "
-            "findings with severity, and provide concrete recommendations."
+            f"Describe the observed condition of the {title.lower()} using the "
+            "technician's specific locations. Name each defect, assign a JobDoc "
+            "severity, and use clear recommend-replace versus recommend-maintain "
+            "language based on what was captured. Do not invent findings."
         ),
         "tone": "professional neutral",
         "min_summary_words": 55,

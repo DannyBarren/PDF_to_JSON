@@ -42,6 +42,44 @@ def test_short_writer_instructions_flagged(clone_valid_template):
     assert "writer_instructions" in str(exc.value)
 
 
+def test_non_gold_severity_keys_rejected(clone_valid_template):
+    data = clone_valid_template()
+    data["pdf_styling"] = {
+        "severity_colors": {"critical": "#dc2626", "info": "#2563eb"},
+    }
+    with pytest.raises(TemplateValidationError) as exc:
+        validate_template(data)
+    assert "severity" in str(exc.value).lower()
+
+
+def test_short_worker_instructions_rejected(clone_valid_template):
+    data = clone_valid_template()
+    data["guidance"]["sections"][0]["worker_instructions"] = "Check the roof."
+    with pytest.raises(TemplateValidationError) as exc:
+        validate_template(data)
+    assert "worker_instructions" in str(exc.value)
+
+
+def test_non_checkable_success_criteria_rejected(clone_valid_template):
+    data = clone_valid_template()
+    # Long enough but no verifiable/checkable signal.
+    data["guidance"]["sections"][0]["success_criteria"] = (
+        "The technician looks around the whole area and forms a general overall "
+        "impression of everything present there today."
+    )
+    with pytest.raises(TemplateValidationError) as exc:
+        validate_template(data)
+    assert "checkable" in str(exc.value).lower()
+
+
+def test_too_few_suggested_phrases_rejected(clone_valid_template):
+    data = clone_valid_template()
+    data["guidance"]["sections"][0]["suggested_phrases"] = ["only one phrase"]
+    with pytest.raises(TemplateValidationError) as exc:
+        validate_template(data)
+    assert "suggested_phrases" in str(exc.value)
+
+
 def test_mirroring_error_is_readable(clone_valid_template):
     data = clone_valid_template()
     data["content_structure"]["sections"].pop()
