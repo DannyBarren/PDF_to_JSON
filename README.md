@@ -270,13 +270,31 @@ Python serverless function. Just add `OPENAI_API_KEY` in the Vercel dashboard
 - [ ] Smoke test: `curl -F "file=@sample.pdf" https://<host>/translate`.
 - [ ] Consider a smaller/faster model for cost during testing.
 
+### Troubleshooting: `401 invalid_api_key` even though the key is set
+
+`/health` showing `llm_configured: true` only means a key is *present*, not that
+OpenAI accepts it. A 401 means the key value being sent is rejected. Common causes:
+
+- **Hidden characters** — surrounding quotes, a trailing space, or a newline
+  pasted into the dashboard / `.env`. The app now automatically strips quotes,
+  whitespace, newlines, and a stray `Bearer ` prefix, so re-saving the key usually
+  resolves it. Make sure you paste the **full** key with nothing extra.
+- **Rotated / revoked key** — generate a fresh key and update it.
+- **Wrong project/org** — a `sk-proj-…` key must belong to a project that can use
+  the selected `PDF_TO_JSON_MODEL`.
+- **Stale deploy** — after changing the env var on Render, trigger a redeploy so
+  the running instance picks up the new value.
+
+The `/translate` endpoint now returns a clear `422` message for these cases
+instead of a raw 401 dump.
+
 ## Development & tests
 
 The schema and validator tests run **without an API key** (the pipeline test uses
 a fake LLM completer):
 
 ```bash
-pytest            # 41 tests, all offline (schema, validator, normalize, pipeline, API, UI)
+pytest            # 57 tests, all offline (schema, validator, normalize, generator, pipeline, API, UI)
 ```
 
 Project layout:

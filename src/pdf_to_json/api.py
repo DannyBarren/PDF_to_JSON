@@ -34,6 +34,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from . import __version__
+from .generator import configured_api_key
 from .pipeline import PipelineError, TranslationPipeline
 from .schema import ReportTemplate
 
@@ -72,7 +73,7 @@ def _cors_origins() -> list[str]:
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI):  # pragma: no cover - side-effect only
-    configured = bool(os.getenv("OPENAI_API_KEY"))
+    configured = bool(configured_api_key())
     model = os.getenv("PDF_TO_JSON_MODEL", "gpt-4o")
     logger.info(
         "pdf_to_json api v%s starting (llm_configured=%s, model=%s, cors=%s)",
@@ -152,7 +153,7 @@ def health() -> dict[str, object]:
         "status": "ok",
         "version": __version__,
         "schema_version": 3,
-        "llm_configured": bool(os.getenv("OPENAI_API_KEY")),
+        "llm_configured": bool(configured_api_key()),
         "model": os.getenv("PDF_TO_JSON_MODEL", "gpt-4o"),
     }
 

@@ -18,7 +18,7 @@ from typing import Any, Protocol
 
 from tenacity import (
     Retrying,
-    retry_if_exception_type,
+    retry_if_not_exception_type,
     stop_after_attempt,
     wait_exponential,
 )
@@ -32,9 +32,39 @@ __all__ = [
     "TemplateGenerator",
     "ChatCompleter",
     "OpenAIChatCompleter",
+    "clean_api_key",
+    "configured_api_key",
 ]
 
 DEFAULT_MODEL = "gpt-4o"
+
+
+def clean_api_key(raw: str | None) -> str:
+    """Sanitize an API key value read from the environment.
+
+    Deployment dashboards and ``.env`` files frequently introduce subtle
+    corruption: wrapping quotes, a stray ``Bearer `` prefix, or trailing
+    whitespace / newlines. Any of these makes OpenAI reject the key with a
+    ``401 invalid_api_key`` even though "the key was entered". We strip those
+    here so the *actual* secret is sent.
+    """
+    if not raw:
+        return ""
+    key = raw.strip()
+    # Strip a single pair of surrounding quotes if present.
+    if len(key) >= 2 and key[0] == key[-1] and key[0] in {'"', "'"}:
+        key = key[1:-1].strip()
+    # Drop an accidental "Bearer " prefix.
+    if key.lower().startswith("bearer "):
+        key = key[7:].strip()
+    # Remove any internal whitespace/newlines that never belong in a key.
+    key = "".join(key.split())
+    return key
+
+
+def configured_api_key() -> str:
+    """Return the sanitized OPENAI_API_KEY (empty string if unusable)."""
+    return clean_api_key(os.getenv("OPENAI_API_KEY"))
 
 
 class GenerationError(Exception):
@@ -92,13 +122,16 @@ class OpenAIChatCompleter:
                 "Install it with `pip install openai`."
             ) from exc
 
-        if not os.getenv("OPENAI_API_KEY"):
+        api_key = configured_api_key()
+        if not api_key:
             raise GenerationError(
                 "OPENAI_API_KEY is not set. Copy .env.example to .env and add "
                 "your key, or export OPENAI_API_KEY in your shell."
             )
         base_url = os.getenv("OPENAI_BASE_URL")
-        kwargs: dict[str, Any] = {"timeout": self.config.timeout}
+        # Pass the sanitized key explicitly rather than relying on the SDK reading
+        # the raw environment value (which may contain quotes/whitespace).
+        kwargs: dict[str, Any] = {"api_key": api_key, "timeout": self.config.timeout}
         if base_url:
             kwargs["base_url"] = base_url
         self._client_obj = OpenAI(**kwargs)
@@ -109,31 +142,65 @@ class OpenAIChatCompleter:
         # never retried. Only the network call below is wrapped in retries.
         client = self._client()
 
+        # Retry transient failures (network, timeout, rate limit, 5xx) but NOT
+        # GenerationError, which we raise for non-retryable problems such as a
+        # rejected API key.
         retryer = Retrying(
             reraise=True,
             stop=stop_after_attempt(max(1, self.config.max_retries)),
             wait=wait_exponential(multiplier=2, min=2, max=30),
-            retry=retry_if_exception_type(Exception),
+            retry=retry_if_not_exception_type(GenerationError),
         )
 
         content: str | None = None
         for attempt in retryer:
             with attempt:
-                response = client.chat.completions.create(
-                    model=self.config.model,
-                    temperature=self.config.temperature,
-                    response_format={"type": "json_object"},
-                    messages=[
-                        {"role": "system", "content": system},
-                        {"role": "user", "content": user},
-                    ],
-                )
+                try:
+                    response = client.chat.completions.create(
+                        model=self.config.model,
+                        temperature=self.config.temperature,
+                        response_format={"type": "json_object"},
+                        messages=[
+                            {"role": "system", "content": system},
+                            {"role": "user", "content": user},
+                        ],
+                    )
+                except Exception as exc:  # noqa: BLE001 - classify below
+                    raise self._as_generation_error(exc)
                 message_content = response.choices[0].message.content
                 if not message_content:
                     raise GenerationError("LLM returned an empty response.")
                 content = message_content
         assert content is not None  # for type-checkers; loop guarantees it
         return content
+
+    @staticmethod
+    def _as_generation_error(exc: Exception) -> Exception:
+        """Turn known non-retryable OpenAI errors into clear GenerationErrors.
+
+        Transient errors are returned unchanged so tenacity can retry them.
+        """
+        name = type(exc).__name__
+        status = getattr(exc, "status_code", None) or getattr(exc, "status", None)
+
+        if name in {"AuthenticationError", "PermissionDeniedError"} or status == 401:
+            return GenerationError(
+                "OpenAI rejected the API key (HTTP 401 invalid_api_key). The key "
+                "value is being sent but is not accepted. Check that OPENAI_API_KEY "
+                "is the full, current key with no surrounding quotes, spaces, or "
+                "line breaks, that it has not been rotated/revoked, and that it "
+                "belongs to the correct project/organization. After updating the "
+                "key on your host (e.g. Render), redeploy so the new value is used."
+            )
+        if name == "NotFoundError" or status == 404:
+            model = os.getenv("PDF_TO_JSON_MODEL", DEFAULT_MODEL)
+            return GenerationError(
+                f"The model '{model}' was not found or is not available to this "
+                "API key. Set PDF_TO_JSON_MODEL to a model your account can access "
+                "(e.g. gpt-4o or gpt-4o-mini)."
+            )
+        # Rate limits / connection / timeout / 5xx: let the caller retry.
+        return exc
 
 
 class TemplateGenerator:
