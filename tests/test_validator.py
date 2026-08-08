@@ -60,16 +60,26 @@ def test_short_worker_instructions_rejected(clone_valid_template):
     assert "worker_instructions" in str(exc.value)
 
 
-def test_non_checkable_success_criteria_rejected(clone_valid_template):
+def test_photoless_success_criteria_accepted(clone_valid_template):
+    # Regression guard: a valid, well-formed success_criteria for a non-photo
+    # section (e.g. general info / summary) must NOT be rejected just because it
+    # doesn't contain photo/spoken keywords.
     data = clone_valid_template()
-    # Long enough but no verifiable/checkable signal.
     data["guidance"]["sections"][0]["success_criteria"] = (
-        "The technician looks around the whole area and forms a general overall "
-        "impression of everything present there today."
+        "All identifying job details (client, address, and roof system type) are "
+        "entered accurately and the overall recommendation is provided before the "
+        "session is submitted."
     )
+    # Should validate without raising.
+    validate_template(data)
+
+
+def test_short_success_criteria_still_rejected(clone_valid_template):
+    data = clone_valid_template()
+    data["guidance"]["sections"][0]["success_criteria"] = "Looks fine."
     with pytest.raises(TemplateValidationError) as exc:
         validate_template(data)
-    assert "checkable" in str(exc.value).lower()
+    assert "success_criteria" in str(exc.value)
 
 
 def test_too_few_suggested_phrases_rejected(clone_valid_template):

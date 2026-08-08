@@ -74,31 +74,14 @@ def validate_template(data: dict[str, Any]) -> ReportTemplate:
     return template
 
 
-# Production-quality thresholds. These are deliberately low bars that any
-# genuine day-one instruction clears; only vague one-liners fail.
+# Production-quality thresholds. These are deliberately objective, low bars that
+# any genuine day-one instruction clears; only vague one-liners fail. We rely on
+# length/count (not fuzzy keyword matching) so we never reject a legitimately
+# worded criterion.
 _MIN_WORKER_WORDS = 12
 _MIN_SUCCESS_WORDS = 8
 _MIN_WRITER_WORDS = 15
 _MIN_PHRASES = 3
-
-# Words that make a success_criterion actually checkable by a supervisor.
-_CHECKABLE_HINTS = (
-    "photo",
-    "photos",
-    "image",
-    "images",
-    "video",
-    "least",
-    "confirm",
-    "state",
-    "stated",
-    "spoken",
-    "record",
-    "recorded",
-    "note",
-    "measurement",
-    "reading",
-)
 
 
 def _semantic_checks(template: ReportTemplate) -> list[str]:
@@ -153,17 +136,11 @@ def _semantic_checks(template: ReportTemplate) -> list[str]:
                 f"too short for a day-one technician (needs >= {_MIN_WORKER_WORDS} "
                 "words describing what to do, what to look for, and what to capture)."
             )
-        success = section.success_criteria
-        if len(success.split()) < _MIN_SUCCESS_WORDS:
+        if len(section.success_criteria.split()) < _MIN_SUCCESS_WORDS:
             problems.append(
                 f"guidance section '{section.section_id}' success_criteria is "
-                f"too short to be checkable (needs >= {_MIN_SUCCESS_WORDS} words)."
-            )
-        elif not any(hint in success.lower() for hint in _CHECKABLE_HINTS):
-            problems.append(
-                f"guidance section '{section.section_id}' success_criteria is not "
-                "concretely checkable; state a verifiable condition (e.g. a minimum "
-                "number of photos plus a spoken confirmation a supervisor can verify)."
+                f"too short to be a checkable pass/fail condition (needs >= "
+                f"{_MIN_SUCCESS_WORDS} words)."
             )
         phrases = [p for p in section.suggested_phrases if p.strip()]
         if len(phrases) < _MIN_PHRASES:
