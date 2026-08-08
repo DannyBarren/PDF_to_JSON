@@ -198,6 +198,50 @@
     .fields-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
     .fchip { background: rgba(96,165,250,.12); color: #93c5fd; border: 1px solid rgba(96,165,250,.25); border-radius: 4px; padding: 2px 8px; font-size: .8rem; font-family: ui-monospace, Menlo, Consolas, monospace; }
 
+    /* Results toolbar */
+    .resultsbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
+    .resultsbar-actions { display: flex; gap: 10px; }
+    .editnote { display: flex; align-items: center; gap: 12px; }
+    .editstatus { font-size: .85rem; color: var(--muted); }
+    .editstatus.dirty { color: #fcd34d; }
+    .linkbtn { background: none; border: none; color: var(--accent); cursor: pointer; font-size: .85rem; padding: 0; text-decoration: underline; }
+    .edithint { margin-top: 10px; }
+
+    /* Editable fields */
+    .v.editable, .h4edit {
+      cursor: text; border-radius: 6px; padding: 4px 8px; margin: -2px -8px;
+      border: 1px solid transparent; transition: border-color .12s, background .12s;
+      outline: none; white-space: pre-wrap; word-break: break-word;
+    }
+    .v.editable:hover, .h4edit:hover { border-color: var(--border-strong); background: rgba(96,165,250,.05); }
+    .v.editable:focus, .h4edit:focus { border-color: var(--accent); background: rgba(96,165,250,.08); box-shadow: 0 0 0 3px rgba(96,165,250,.15); }
+    .v.editable:empty::before, .h4edit:empty::before { content: attr(data-placeholder); color: var(--muted); opacity: .7; }
+    .v.editable.invalid, .h4edit.invalid, .numedit.invalid { border-color: var(--err) !important; box-shadow: 0 0 0 3px rgba(248,113,113,.18); }
+    .h4edit { font-size: 1.02rem; font-weight: 700; color: var(--text); display: inline-block; min-width: 60px; }
+    .fieldwrap { position: relative; }
+    .k .editdot { display: none; margin-left: 6px; font-size: .62rem; font-weight: 700; color: #fcd34d; text-transform: none; letter-spacing: 0; }
+    .k .editdot.show { display: inline; }
+    .k .revert { display: none; margin-left: 8px; font-size: .68rem; color: var(--accent); cursor: pointer; text-decoration: underline; text-transform: none; letter-spacing: 0; }
+    .k .revert.show { display: inline; }
+
+    .numedit {
+      width: 84px; background: var(--surface); color: var(--text); border: 1px solid var(--border-strong);
+      border-radius: 6px; padding: 4px 8px; font-size: .9rem; font-family: inherit;
+    }
+    .numedit:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(96,165,250,.15); }
+    .numrow { display: flex; gap: 18px; flex-wrap: wrap; align-items: flex-end; }
+    .numrow .numcell { display: flex; flex-direction: column; gap: 4px; }
+    .numrow .numcell label { font-size: .7rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+
+    /* Editable phrase / field chips */
+    .phrase.editable, .fchip.editable { display: inline-flex; align-items: center; gap: 6px; }
+    .phrase .ptext, .fchip .ftext { outline: none; min-width: 20px; }
+    .phrase .ptext:focus, .fchip .ftext:focus { text-decoration: underline; }
+    .chip-x { cursor: pointer; color: var(--muted); font-weight: 700; line-height: 1; padding: 0 2px; }
+    .chip-x:hover { color: var(--err); }
+    .chip-add { cursor: pointer; border: 1px dashed var(--border-strong); background: transparent; color: var(--accent); border-radius: 5px; padding: 3px 10px; font-size: .82rem; }
+    .chip-add:hover { border-color: var(--accent); background: rgba(96,165,250,.08); }
+
     /* JSON viewer */
     .jsonbar { display: flex; justify-content: flex-end; gap: 10px; margin-bottom: 10px; }
     pre.json {
@@ -292,6 +336,20 @@
     <section class="card" id="results">
       <div class="summary" id="summary"></div>
 
+      <div class="resultsbar">
+        <div class="editnote">
+          <span id="editStatus" class="editstatus">No edits yet</span>
+          <button class="linkbtn" id="resetBtn" hidden>Reset all edits</button>
+        </div>
+        <div class="resultsbar-actions">
+          <button class="btn secondary" id="copyBtn">Copy</button>
+          <button class="btn" id="downloadBtn">Download JSON</button>
+        </div>
+      </div>
+
+      <div class="banner error" id="editErrorBanner"></div>
+      <div class="hint edithint">Tip: click any highlighted text below to edit it. Changes update the JSON and download instantly.</div>
+
       <div class="tabs">
         <div class="tab active" data-tab="overview">Overview</div>
         <div class="tab" data-tab="json">JSON</div>
@@ -304,8 +362,8 @@
 
       <div class="panel" id="panel-json">
         <div class="jsonbar">
-          <button class="btn secondary" id="copyBtn">Copy</button>
-          <button class="btn secondary" id="downloadBtn">Download .json</button>
+          <button class="btn secondary" id="copyBtnJson">Copy</button>
+          <button class="btn secondary" id="downloadBtnJson">Download .json</button>
         </div>
         <pre class="json" id="jsonView"></pre>
       </div>
@@ -481,9 +539,165 @@
       return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     }
 
+    // ---- Edit-state plumbing -------------------------------------------------
+    // lastTemplate is the single source of truth. Every editable field writes
+    // straight into it by path; the JSON tab and Download always serialize it.
+    let originalTemplate = null;
+    let editableRegistry = [];  // {el, pathArr, required, type, min, dot, revert, label}
+    let arrayValidators = [];   // {pathArr, min, label, wrap}
+
+    function getByPath(obj, path) {
+      return path.reduce((o, k) => (o == null ? undefined : o[k]), obj);
+    }
+    function setByPath(obj, path, val) {
+      let o = obj;
+      for (let i = 0; i < path.length - 1; i++) o = o[path[i]];
+      o[path[path.length - 1]] = val;
+    }
+
+    function isDirty() {
+      return JSON.stringify(lastTemplate) !== JSON.stringify(originalTemplate);
+    }
+    function updateDirty() {
+      const dirty = isDirty();
+      $('editStatus').textContent = dirty ? 'Edited — remember to download' : 'No edits yet';
+      $('editStatus').classList.toggle('dirty', dirty);
+      $('resetBtn').hidden = !dirty;
+    }
+    function syncJson() {
+      $('jsonView').innerHTML = highlightJSON(JSON.stringify(lastTemplate, null, 2));
+    }
+    function refreshMarker(entry) {
+      if (!entry || !entry.dot) return;
+      const mod = JSON.stringify(getByPath(lastTemplate, entry.pathArr)) !==
+                  JSON.stringify(getByPath(originalTemplate, entry.pathArr));
+      entry.dot.classList.toggle('show', mod);
+      if (entry.revert) entry.revert.classList.toggle('show', mod);
+    }
+    function onAnyEdit(entry) {
+      if (entry) refreshMarker(entry);
+      syncJson();
+      updateDirty();
+      runValidation();
+    }
+
+    // ---- Editable field builders --------------------------------------------
+    function buildLabel(text) {
+      const k = document.createElement('div');
+      k.className = 'k';
+      k.appendChild(document.createTextNode(text + ' '));
+      const dot = document.createElement('span'); dot.className = 'editdot'; dot.textContent = '• edited';
+      const revert = document.createElement('span'); revert.className = 'revert'; revert.textContent = 'revert';
+      k.appendChild(dot); k.appendChild(revert);
+      return { k, dot, revert };
+    }
+
+    function textField(label, pathArr, opts = {}) {
+      const wrap = document.createElement('div'); wrap.className = 'field fieldwrap';
+      const { k, dot, revert } = buildLabel(label);
+      const el = document.createElement('div');
+      el.className = 'v editable';
+      el.contentEditable = 'true';
+      el.dataset.placeholder = opts.placeholder || (opts.required ? '(required)' : '(empty)');
+      el.textContent = getByPath(lastTemplate, pathArr) ?? '';
+      const entry = { el, pathArr, required: !!opts.required, type: 'text', dot, revert, label };
+      editableRegistry.push(entry);
+      el.addEventListener('input', () => { setByPath(lastTemplate, pathArr, el.innerText); onAnyEdit(entry); });
+      if (!opts.multiline) {
+        el.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); el.blur(); } });
+      }
+      revert.addEventListener('click', () => {
+        const ov = getByPath(originalTemplate, pathArr);
+        setByPath(lastTemplate, pathArr, ov);
+        el.textContent = ov ?? '';
+        onAnyEdit(entry);
+      });
+      wrap.appendChild(k); wrap.appendChild(el);
+      return wrap;
+    }
+
+    function titleEl(pathArr) {
+      const el = document.createElement('span');
+      el.className = 'h4edit';
+      el.contentEditable = 'true';
+      el.dataset.placeholder = '(section title)';
+      el.textContent = getByPath(lastTemplate, pathArr) ?? '';
+      const entry = { el, pathArr, required: true, type: 'text', dot: null, revert: null, label: 'Section title' };
+      editableRegistry.push(entry);
+      el.addEventListener('input', () => { setByPath(lastTemplate, pathArr, el.innerText); onAnyEdit(entry); });
+      el.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); el.blur(); } });
+      return el;
+    }
+
+    function numberCell(label, pathArr, opts = {}) {
+      const cell = document.createElement('div'); cell.className = 'numcell';
+      const lab = document.createElement('label'); lab.textContent = label; cell.appendChild(lab);
+      const inp = document.createElement('input');
+      inp.type = 'number'; inp.className = 'numedit';
+      if (opts.min != null) inp.min = opts.min;
+      if (opts.max != null) inp.max = opts.max;
+      inp.value = getByPath(lastTemplate, pathArr);
+      const entry = { el: inp, pathArr, required: true, type: 'number', min: opts.min, max: opts.max, dot: null, revert: null, label };
+      editableRegistry.push(entry);
+      inp.addEventListener('input', () => {
+        const v = inp.value === '' ? null : Number(inp.value);
+        setByPath(lastTemplate, pathArr, v);
+        onAnyEdit(entry);
+      });
+      cell.appendChild(inp);
+      return cell;
+    }
+
+    function chipsField(label, pathArr, opts = {}) {
+      const wrap = document.createElement('div'); wrap.className = 'field fieldwrap';
+      const { k } = buildLabel(label);
+      const box = document.createElement('div'); box.className = opts.container || 'phrases';
+      const chipClass = opts.chipClass || 'phrase';
+      const textClass = opts.textClass || 'ptext';
+      arrayValidators.push({ pathArr, min: opts.min || 1, label, wrap: box });
+
+      function rebuild() {
+        box.innerHTML = '';
+        const arr = getByPath(lastTemplate, pathArr) || [];
+        arr.forEach((val, idx) => {
+          const chip = document.createElement('span'); chip.className = chipClass + ' editable';
+          const txt = document.createElement('span'); txt.className = textClass; txt.contentEditable = 'true'; txt.textContent = val;
+          txt.addEventListener('input', () => { arr[idx] = txt.innerText; setByPath(lastTemplate, pathArr, arr); onAnyEdit(); });
+          txt.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); txt.blur(); } });
+          const x = document.createElement('span'); x.className = 'chip-x'; x.textContent = '×'; x.title = 'Remove';
+          x.addEventListener('click', () => { arr.splice(idx, 1); setByPath(lastTemplate, pathArr, arr); rebuild(); onAnyEdit(); });
+          chip.appendChild(txt); chip.appendChild(x); box.appendChild(chip);
+        });
+        const add = document.createElement('button'); add.type = 'button'; add.className = 'chip-add';
+        add.textContent = opts.addLabel || '+ Add';
+        add.addEventListener('click', () => {
+          arr.push(opts.newValue || 'new item'); setByPath(lastTemplate, pathArr, arr); rebuild(); onAnyEdit();
+          const texts = box.querySelectorAll('.' + textClass);
+          const last = texts[texts.length - 1];
+          if (last) { last.focus(); const r = document.createRange(); r.selectNodeContents(last); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); }
+        });
+        box.appendChild(add);
+      }
+      rebuild();
+      wrap.appendChild(k); wrap.appendChild(box);
+      return wrap;
+    }
+
+    function numRow(cells) {
+      const row = document.createElement('div'); row.className = 'field numrow';
+      cells.forEach(c => row.appendChild(c));
+      return row;
+    }
+
     function renderResults(t) {
-      // Summary stats
+      lastTemplate = t;
+      originalTemplate = JSON.parse(JSON.stringify(t));
+      editableRegistry = [];
+      arrayValidators = [];
+
       const g = t.guidance || {};
+
+      // Summary stats (read-only identifiers)
       const stats = [
         ['Document class', t.document_class, 'small'],
         ['Report type', t.report_type, 'small'],
@@ -495,46 +709,101 @@
         `<div class="stat"><div class="label">${esc(label)}</div><div class="value ${cls}">${esc(value)}</div></div>`
       ).join('');
 
-      // Scripts
-      $('scripts').innerHTML = `
-        <div class="section">
-          <div class="field"><div class="k">Title</div><div class="v"><strong>${esc(t.title)}</strong></div></div>
-          <div class="field"><div class="k">Description</div><div class="v">${esc(t.template_description)}</div></div>
-          <div class="field"><div class="k">Intro script</div><div class="v">${esc(g.intro_script || '')}</div></div>
-          <div class="field"><div class="k">Outro script</div><div class="v">${esc(g.outro_script || '')}</div></div>
-        </div>`;
+      // Top / scripts block (editable)
+      const scripts = $('scripts'); scripts.innerHTML = '';
+      const topCard = document.createElement('div'); topCard.className = 'section';
+      topCard.appendChild(textField('Title', ['title'], { required: true }));
+      topCard.appendChild(textField('Description', ['template_description'], { required: true, multiline: true }));
+      topCard.appendChild(textField('Business name', ['business_name'], { placeholder: '(optional)' }));
+      topCard.appendChild(textField('Job address', ['job_address'], { placeholder: '(optional)' }));
+      topCard.appendChild(textField('Intro script', ['guidance', 'intro_script'], { required: true, multiline: true }));
+      topCard.appendChild(textField('Outro script', ['guidance', 'outro_script'], { required: true, multiline: true }));
+      scripts.appendChild(topCard);
 
-      // Merge guidance + content sections by section_id
-      const content = {};
-      ((t.content_structure || {}).sections || []).forEach(s => { content[s.section_id] = s; });
-      const gsections = (g.sections || []).slice().sort((a, b) => a.capture_order - b.capture_order);
+      // Sections (editable). Display in capture order; bind to real array indices.
+      const cIndexById = {};
+      ((t.content_structure || {}).sections || []).forEach((s, i) => { cIndexById[s.section_id] = i; });
+      const gOrder = (g.sections || [])
+        .map((s, gi) => ({ s, gi }))
+        .sort((a, b) => a.s.capture_order - b.s.capture_order);
 
-      $('sections').innerHTML = gsections.map(s => {
-        const c = content[s.section_id] || {};
-        const phrases = (s.suggested_phrases || []).map(p => `<span class="phrase">${esc(p)}</span>`).join('');
-        const fields = (c.fields || []).map(f => `<span class="fchip">${esc(f)}</span>`).join('');
-        return `
-        <div class="section">
-          <div class="head">
-            <span class="order">${esc(s.capture_order)}</span>
-            <h4>${esc(s.title)}</h4>
-            <span class="pill ${s.required ? 'req' : 'opt'}">${s.required ? 'Required' : 'Optional'}</span>
-            <span class="pill time">${esc(s.estimated_seconds)}s</span>
-          </div>
-          <div class="field"><div class="k">Voice prompt</div><div class="v">${esc(s.voice_prompt)}</div></div>
-          <div class="field"><div class="k">Worker instructions</div><div class="v">${esc(s.worker_instructions)}</div></div>
-          <div class="field"><div class="k">Success criteria</div><div class="v">${esc(s.success_criteria)}</div></div>
-          ${phrases ? `<div class="field"><div class="k">Suggested phrases</div><div class="phrases">${phrases}</div></div>` : ''}
-          ${c.writer_instructions ? `<div class="field"><div class="k">Writer instructions</div><div class="v">${esc(c.writer_instructions)}</div></div>` : ''}
-          ${fields ? `<div class="field"><div class="k">Required fields</div><div class="fields-list">${fields}</div></div>` : ''}
-        </div>`;
-      }).join('');
+      const host = $('sections'); host.innerHTML = '';
+      gOrder.forEach(({ s, gi }) => {
+        const ci = cIndexById[s.section_id];
+        const card = document.createElement('div'); card.className = 'section';
 
-      // JSON view
-      $('jsonView').innerHTML = highlightJSON(JSON.stringify(t, null, 2));
+        const head = document.createElement('div'); head.className = 'head';
+        const order = document.createElement('span'); order.className = 'order'; order.textContent = s.capture_order;
+        const req = document.createElement('span');
+        req.className = 'pill ' + (s.required ? 'req' : 'opt');
+        req.textContent = s.required ? 'Required' : 'Optional';
+        head.appendChild(order);
+        head.appendChild(titleEl(['guidance', 'sections', gi, 'title']));
+        head.appendChild(req);
+        card.appendChild(head);
+
+        card.appendChild(textField('Voice prompt', ['guidance', 'sections', gi, 'voice_prompt'], { required: true, multiline: true }));
+        card.appendChild(textField('On-screen text', ['guidance', 'sections', gi, 'on_screen_text'], { required: true }));
+        card.appendChild(textField('Worker instructions', ['guidance', 'sections', gi, 'worker_instructions'], { required: true, multiline: true }));
+        card.appendChild(textField('Success criteria', ['guidance', 'sections', gi, 'success_criteria'], { required: true, multiline: true }));
+        card.appendChild(chipsField('Suggested phrases', ['guidance', 'sections', gi, 'suggested_phrases'], { addLabel: '+ Add phrase', newValue: 'new phrase', min: 1 }));
+
+        const cells = [
+          numberCell('Est. seconds', ['guidance', 'sections', gi, 'estimated_seconds'], { min: 1 }),
+          numberCell('Min marks', ['guidance', 'sections', gi, 'min_marks'], { min: 0 }),
+        ];
+        if (ci != null) cells.push(numberCell('Min summary words', ['content_structure', 'sections', ci, 'min_summary_words'], { min: 1 }));
+        card.appendChild(numRow(cells));
+
+        if (ci != null) {
+          card.appendChild(textField('Writer instructions', ['content_structure', 'sections', ci, 'writer_instructions'], { required: true, multiline: true }));
+          card.appendChild(textField('Default text', ['content_structure', 'sections', ci, 'default_text'], { required: true, multiline: true }));
+          card.appendChild(textField('Tone', ['content_structure', 'sections', ci, 'tone'], { required: true }));
+          card.appendChild(chipsField('Required fields', ['content_structure', 'sections', ci, 'fields'], { addLabel: '+ Add field', newValue: 'new_field', chipClass: 'fchip', textClass: 'ftext', container: 'fields-list', min: 1 }));
+        }
+
+        host.appendChild(card);
+      });
+
+      syncJson();
+      updateDirty();
+      runValidation();
 
       $('results').classList.add('show');
       $('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function runValidation() {
+      const problems = [];
+      editableRegistry.forEach(entry => {
+        let bad = false;
+        if (entry.type === 'text' && entry.required) {
+          const v = (getByPath(lastTemplate, entry.pathArr) || '').toString().trim();
+          if (!v) { bad = true; problems.push(`${entry.label} cannot be empty`); }
+        } else if (entry.type === 'number') {
+          const v = getByPath(lastTemplate, entry.pathArr);
+          if (v == null || isNaN(v) || (entry.min != null && v < entry.min) || (entry.max != null && v > entry.max)) {
+            bad = true; problems.push(`${entry.label} must be a number${entry.min != null ? ' ≥ ' + entry.min : ''}`);
+          }
+        }
+        entry.el.classList.toggle('invalid', bad);
+      });
+      arrayValidators.forEach(av => {
+        const arr = (getByPath(lastTemplate, av.pathArr) || []).filter(x => x != null && x.toString().trim());
+        if (arr.length < av.min) problems.push(`${av.label} needs at least ${av.min} item`);
+      });
+
+      const b = $('editErrorBanner');
+      const ok = problems.length === 0;
+      if (!ok) {
+        b.textContent = 'Fix before downloading: ' + problems.join('; ');
+        b.classList.add('show');
+      } else {
+        b.classList.remove('show');
+      }
+      $('downloadBtn').disabled = !ok;
+      $('downloadBtnJson').disabled = !ok;
+      return ok;
     }
 
     function highlightJSON(json) {
@@ -565,24 +834,37 @@
       });
     });
 
-    // ---- Copy / Download ----
-    $('copyBtn').addEventListener('click', async () => {
+    // ---- Copy / Download / Reset ----
+    async function doCopy() {
       if (!lastTemplate) return;
       try {
         await navigator.clipboard.writeText(JSON.stringify(lastTemplate, null, 2));
         toast('Copied to clipboard');
       } catch (e) { toast('Copy failed'); }
-    });
+    }
 
-    $('downloadBtn').addEventListener('click', () => {
+    function doDownload() {
       if (!lastTemplate) return;
+      if (!runValidation()) { toast('Fix validation issues before downloading'); return; }
       const blob = new Blob([JSON.stringify(lastTemplate, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = (lastTemplate.report_type || 'report_template') + '.json';
+      a.download = (lastTemplate.report_type || 'report_template') + '_template.json';
       document.body.appendChild(a); a.click(); a.remove();
       URL.revokeObjectURL(url);
+      toast('Downloaded ' + a.download);
+    }
+
+    $('copyBtn').addEventListener('click', doCopy);
+    $('copyBtnJson').addEventListener('click', doCopy);
+    $('downloadBtn').addEventListener('click', doDownload);
+    $('downloadBtnJson').addEventListener('click', doDownload);
+
+    $('resetBtn').addEventListener('click', () => {
+      if (!originalTemplate) return;
+      renderResults(JSON.parse(JSON.stringify(originalTemplate)));
+      toast('Reverted all edits');
     });
 
     // ---- Helpers ----

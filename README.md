@@ -109,6 +109,17 @@ uvicorn pdf_to_json.api:app --reload --port 8000
 From the page you can:
 
 - **Drag & drop (or pick) a PDF** and click **Translate PDF**.
+- **Edit the template in place** — every human-readable field (title, description,
+  business name, job address, intro/outro, and per-section voice prompt,
+  on-screen text, worker instructions, success criteria, suggested phrases,
+  writer instructions, default text, tone, and numbers like estimated seconds /
+  min marks / min summary words) is click-to-edit right in the clean summary.
+  Edits update the JSON tab and the download instantly; a modified field shows an
+  "edited" marker with a one-click **revert**, and **Reset all edits** restores
+  the original. Emptying a required field shows a validation warning and disables
+  download until fixed.
+- **Download JSON** (prominent button) to export the current, edited template as
+  `{report_type}_template.json`, ready to drop into JobDoc.
 - See a live **service/health indicator** (shows whether your `OPENAI_API_KEY`
   is configured).
 - View a **summary** (document class, report type, section count, estimated
