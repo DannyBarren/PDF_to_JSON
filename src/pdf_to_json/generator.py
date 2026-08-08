@@ -222,6 +222,7 @@ class TemplateGenerator:
             page_count=document.page_count,
             detected_headings=document.detected_headings,
             filename=filename,
+            image_hints=document.image_hints,
         )
 
         raw = self._completer.complete(system=SYSTEM_PROMPT, user=user_prompt)

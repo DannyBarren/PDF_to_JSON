@@ -13,7 +13,7 @@ from typing import Any
 
 from .extractor import ExtractedDocument, ExtractionError, extract_pdf
 from .generator import ChatCompleter, GenerationError, TemplateGenerator
-from .normalize import normalize_template
+from .normalize import apply_image_hints, normalize_template
 from .schema import ReportTemplate
 from .validator import (
     TemplateValidationError,
@@ -67,10 +67,12 @@ class TranslationPipeline:
         except GenerationError as exc:
             raise PipelineError(f"Generation failed: {exc}") from exc
 
-        # 3. Normalize small, mechanically-fixable quirks, then validate the
-        #    hard contract (schema, mirroring, severity). Quality issues are
-        #    collected as non-fatal warnings and never block delivery.
+        # 3. Normalize small, mechanically-fixable quirks, deterministically
+        #    force photo settings for sections whose source had images, then
+        #    validate the hard contract (schema, mirroring, severity). Quality
+        #    issues are collected as non-fatal warnings and never block delivery.
         repaired = normalize_template(raw)
+        apply_image_hints(repaired, document.image_hints)
         try:
             template = validate_template(repaired)
         except TemplateValidationError as exc:

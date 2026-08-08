@@ -242,6 +242,54 @@
     .chip-add { cursor: pointer; border: 1px dashed var(--border-strong); background: transparent; color: var(--accent); border-radius: 5px; padding: 3px 10px; font-size: .82rem; }
     .chip-add:hover { border-color: var(--accent); background: rgba(96,165,250,.08); }
 
+    /* Modular section blocks: drag handle, delete, reorder states */
+    .section { transition: box-shadow .12s, border-color .12s, opacity .12s; }
+    .section.dragging { opacity: .5; }
+    .section.drag-over { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(96,165,250,.35); }
+    .head-spacer { flex: 1 1 auto; }
+    .draghandle {
+      cursor: grab; user-select: none; color: var(--muted); font-size: 1.1rem; line-height: 1;
+      padding: 2px 6px; border-radius: 6px; border: 1px solid transparent;
+    }
+    .draghandle:hover { color: var(--accent); border-color: var(--border-strong); background: rgba(96,165,250,.06); }
+    .draghandle:active { cursor: grabbing; }
+    .delbtn {
+      background: transparent; border: 1px solid var(--border-strong); color: #fca5a5;
+      border-radius: 6px; padding: 4px 10px; font-size: .8rem; font-weight: 600; cursor: pointer;
+    }
+    .delbtn:hover { border-color: var(--err); background: rgba(248,113,113,.10); color: #f87171; }
+
+    .add-section {
+      display: block; width: 100%; margin-top: 6px; padding: 12px; cursor: pointer;
+      background: transparent; color: var(--accent); border: 1.5px dashed var(--border-strong);
+      border-radius: var(--radius); font-size: .92rem; font-weight: 600;
+    }
+    .add-section:hover { border-color: var(--accent); background: rgba(96,165,250,.06); }
+
+    /* Photo slot */
+    .photoslot {
+      display: flex; gap: 12px; align-items: flex-start; margin-top: 12px;
+      background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--muted);
+      border-radius: 8px; padding: 12px 14px;
+    }
+    .photoslot.on { border-left-color: var(--accent); background: rgba(96,165,250,.06); }
+    .photoslot .ps-icon { font-size: 1.3rem; filter: grayscale(1); opacity: .5; }
+    .photoslot.on .ps-icon { filter: none; opacity: 1; }
+    .photoslot .ps-body { flex: 1; }
+    .photoslot .ps-title { font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 8px; }
+    .photoslot .ps-row { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; }
+    .photoslot .ps-max, .photoslot .ps-pos { display: flex; align-items: center; gap: 6px; }
+    .photoslot .ps-max label, .photoslot .ps-pos label { font-size: .78rem; color: var(--muted); }
+    .photoslot .ps-status { margin-top: 8px; font-size: .82rem; color: var(--muted); }
+    .photoslot.on .ps-status { color: #93c5fd; }
+    .switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: .88rem; color: var(--text); }
+    .switch input { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+    .seledit {
+      background: var(--surface); color: var(--text); border: 1px solid var(--border-strong);
+      border-radius: 6px; padding: 4px 8px; font-size: .85rem; font-family: inherit; cursor: pointer;
+    }
+    .seledit:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(96,165,250,.15); }
+
     /* JSON viewer */
     .jsonbar { display: flex; justify-content: flex-end; gap: 10px; margin-bottom: 10px; }
     pre.json {
@@ -540,11 +588,18 @@
     }
 
     // ---- Edit-state plumbing -------------------------------------------------
-    // lastTemplate is the single source of truth. Every editable field writes
-    // straight into it by path; the JSON tab and Download always serialize it.
+    // lastTemplate is the single source of truth. Every editable field and every
+    // structural change (reorder/delete/add/photo) writes straight into it; the
+    // JSON tab and Download always serialize it. Structural changes call
+    // rerender() (rebuilds the DOM from lastTemplate) while keeping the LLM
+    // baseline (originalTemplate) intact for "edited" markers and Reset.
     let originalTemplate = null;
-    let editableRegistry = [];  // {el, pathArr, required, type, min, dot, revert, label}
-    let arrayValidators = [];   // {pathArr, min, label, wrap}
+    let originalIndex = { g: {}, c: {} };
+    let editableRegistry = [];  // {el, pathArr, required, type, min, dot, revert, label, origValue}
+    let arrayValidators = [];   // {pathArr, min, label}
+    let dragId = null;
+
+    const clone = (o) => JSON.parse(JSON.stringify(o));
 
     function getByPath(obj, path) {
       return path.reduce((o, k) => (o == null ? undefined : o[k]), obj);
@@ -569,8 +624,8 @@
     }
     function refreshMarker(entry) {
       if (!entry || !entry.dot) return;
-      const mod = JSON.stringify(getByPath(lastTemplate, entry.pathArr)) !==
-                  JSON.stringify(getByPath(originalTemplate, entry.pathArr));
+      const cur = getByPath(lastTemplate, entry.pathArr);
+      const mod = JSON.stringify(cur) !== JSON.stringify(entry.origValue);
       entry.dot.classList.toggle('show', mod);
       if (entry.revert) entry.revert.classList.toggle('show', mod);
     }
@@ -579,6 +634,78 @@
       syncJson();
       updateDirty();
       runValidation();
+    }
+
+    // ---- Structural model operations ----------------------------------------
+    // Keep guidance + content_structure perfectly mirrored and capture_order a
+    // clean 1..N sequence at all times.
+    function normalizeOrder(t) {
+      const gs = (t.guidance.sections || []).slice().sort((a, b) => (a.capture_order || 0) - (b.capture_order || 0));
+      gs.forEach((s, i) => { s.capture_order = i + 1; });
+      t.guidance.sections = gs;
+      const cById = {};
+      (t.content_structure.sections || []).forEach(s => { cById[s.section_id] = s; });
+      t.content_structure.sections = gs.map(s => cById[s.section_id]).filter(Boolean);
+    }
+    function currentOrderIds() { return lastTemplate.guidance.sections.map(s => s.section_id); }
+    function applyOrder(orderIds) {
+      const gById = {}, cById = {};
+      lastTemplate.guidance.sections.forEach(s => { gById[s.section_id] = s; });
+      lastTemplate.content_structure.sections.forEach(s => { cById[s.section_id] = s; });
+      lastTemplate.guidance.sections = orderIds.map(id => gById[id]).filter(Boolean);
+      lastTemplate.guidance.sections.forEach((s, i) => { s.capture_order = i + 1; });
+      lastTemplate.content_structure.sections = orderIds.map(id => cById[id]).filter(Boolean);
+    }
+    function moveSection(fromId, toId) {
+      const ids = currentOrderIds();
+      const from = ids.indexOf(fromId);
+      if (from < 0) return;
+      ids.splice(from, 1);
+      const to = toId == null ? ids.length : ids.indexOf(toId);
+      ids.splice(to < 0 ? ids.length : to, 0, fromId);
+      applyOrder(ids);
+      rerender();
+      toast('Section reordered');
+    }
+    function deleteSection(id) {
+      if (lastTemplate.guidance.sections.length <= 1) { toast('At least one section is required'); return; }
+      applyOrder(currentOrderIds().filter(x => x !== id));
+      rerender();
+      toast('Section deleted');
+    }
+    function makeGuidanceSection(id) {
+      return {
+        section_id: id, title: 'New Section', capture_order: 999, required: true, min_marks: 1,
+        voice_prompt: 'Describe this area and capture what you see.',
+        on_screen_text: 'New section',
+        worker_instructions: 'Walk to this area, photograph anything relevant with something for scale, and describe the condition out loud so it is captured for the report.',
+        success_criteria: 'At least one clear photo and a spoken description of the condition are captured, or the technician states nothing was found.',
+        suggested_phrases: ['This looks in good condition', 'I see an issue here', 'No defects found'],
+        estimated_seconds: 120,
+      };
+    }
+    function makeContentSection(id) {
+      return {
+        section_id: id, title: 'New Section',
+        default_text: 'This item was not assessed during this visit.',
+        fields: ['condition', 'findings', 'severity', 'recommendation'],
+        writer_instructions: 'Summarize the observed condition using the technician\'s specific notes, list findings with a JobDoc severity, and give a clear recommendation for this section.',
+        tone: 'professional neutral', min_summary_words: 45, show_photo: true, show_severity_badge: true,
+        image_placement: { required: true, position: 'after_summary', caption_style: 'narration_excerpt_with_timestamp', max_images: 3 },
+        layout_hints: { page_break_before: false, callout_style: 'severity_border' },
+      };
+    }
+    function addSection() {
+      const existing = new Set(currentOrderIds());
+      let id = 'new_section', n = 2;
+      while (existing.has(id)) { id = 'new_section_' + n; n++; }
+      lastTemplate.guidance.sections.push(makeGuidanceSection(id));
+      lastTemplate.content_structure.sections.push(makeContentSection(id));
+      rerender();
+      toast('Section added');
+      const cards = $('sections').querySelectorAll('.section');
+      const last = cards[cards.length - 1];
+      if (last) last.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
     // ---- Editable field builders --------------------------------------------
@@ -600,29 +727,29 @@
       el.contentEditable = 'true';
       el.dataset.placeholder = opts.placeholder || (opts.required ? '(required)' : '(empty)');
       el.textContent = getByPath(lastTemplate, pathArr) ?? '';
-      const entry = { el, pathArr, required: !!opts.required, type: 'text', dot, revert, label };
+      const entry = { el, pathArr, required: !!opts.required, type: 'text', dot, revert, label, origValue: opts.origValue };
       editableRegistry.push(entry);
       el.addEventListener('input', () => { setByPath(lastTemplate, pathArr, el.innerText); onAnyEdit(entry); });
       if (!opts.multiline) {
         el.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); el.blur(); } });
       }
       revert.addEventListener('click', () => {
-        const ov = getByPath(originalTemplate, pathArr);
-        setByPath(lastTemplate, pathArr, ov);
-        el.textContent = ov ?? '';
+        setByPath(lastTemplate, pathArr, entry.origValue);
+        el.textContent = entry.origValue ?? '';
         onAnyEdit(entry);
       });
+      refreshMarker(entry);
       wrap.appendChild(k); wrap.appendChild(el);
       return wrap;
     }
 
-    function titleEl(pathArr) {
+    function titleEl(pathArr, origValue) {
       const el = document.createElement('span');
       el.className = 'h4edit';
       el.contentEditable = 'true';
       el.dataset.placeholder = '(section title)';
       el.textContent = getByPath(lastTemplate, pathArr) ?? '';
-      const entry = { el, pathArr, required: true, type: 'text', dot: null, revert: null, label: 'Section title' };
+      const entry = { el, pathArr, required: true, type: 'text', dot: null, revert: null, label: 'Section title', origValue };
       editableRegistry.push(entry);
       el.addEventListener('input', () => { setByPath(lastTemplate, pathArr, el.innerText); onAnyEdit(entry); });
       el.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); el.blur(); } });
@@ -654,7 +781,7 @@
       const box = document.createElement('div'); box.className = opts.container || 'phrases';
       const chipClass = opts.chipClass || 'phrase';
       const textClass = opts.textClass || 'ptext';
-      arrayValidators.push({ pathArr, min: opts.min || 1, label, wrap: box });
+      arrayValidators.push({ pathArr, min: opts.min || 1, label });
 
       function rebuild() {
         box.innerHTML = '';
@@ -689,13 +816,79 @@
       return row;
     }
 
+    // ---- Photo-slot control --------------------------------------------------
+    function photoSlot(ci) {
+      const sec = lastTemplate.content_structure.sections[ci];
+      if (!sec.image_placement) {
+        sec.image_placement = { required: !!sec.show_photo, position: 'after_summary', caption_style: 'narration_excerpt_with_timestamp', max_images: 3 };
+      }
+      const wrap = document.createElement('div'); wrap.className = 'photoslot';
+      const icon = document.createElement('div'); icon.className = 'ps-icon'; icon.textContent = '📷';
+      const body = document.createElement('div'); body.className = 'ps-body';
+      const title = document.createElement('div'); title.className = 'ps-title'; title.textContent = 'Photo slot';
+      const row = document.createElement('div'); row.className = 'ps-row';
+
+      const tog = document.createElement('label'); tog.className = 'switch';
+      const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = !!sec.show_photo;
+      tog.appendChild(cb); tog.appendChild(document.createTextNode('Require photos'));
+
+      const maxCell = document.createElement('div'); maxCell.className = 'ps-max';
+      const maxLab = document.createElement('label'); maxLab.textContent = 'Max images';
+      const maxInp = document.createElement('input'); maxInp.type = 'number'; maxInp.min = 1; maxInp.max = 10; maxInp.className = 'numedit';
+      maxInp.value = sec.image_placement.max_images ?? 3;
+      maxCell.appendChild(maxLab); maxCell.appendChild(maxInp);
+
+      const posCell = document.createElement('div'); posCell.className = 'ps-pos';
+      const posLab = document.createElement('label'); posLab.textContent = 'Position';
+      const posSel = document.createElement('select'); posSel.className = 'seledit';
+      ['after_summary', 'before_summary', 'inline', 'appendix'].forEach(p => {
+        const o = document.createElement('option'); o.value = p; o.textContent = p.replace('_', ' ');
+        if ((sec.image_placement.position || 'after_summary') === p) o.selected = true;
+        posSel.appendChild(o);
+      });
+      posCell.appendChild(posLab); posCell.appendChild(posSel);
+
+      const status = document.createElement('div'); status.className = 'ps-status';
+      function paint() {
+        wrap.classList.toggle('on', !!sec.show_photo);
+        status.textContent = sec.show_photo
+          ? `Photos ON · up to ${sec.image_placement.max_images} · ${sec.image_placement.position}`
+          : 'No photos required for this section';
+        maxInp.disabled = !sec.show_photo; posSel.disabled = !sec.show_photo;
+      }
+      cb.addEventListener('change', () => { sec.show_photo = cb.checked; sec.image_placement.required = cb.checked; paint(); onAnyEdit(); });
+      maxInp.addEventListener('input', () => { sec.image_placement.max_images = Math.max(1, Math.min(10, Number(maxInp.value) || 1)); paint(); onAnyEdit(); });
+      posSel.addEventListener('change', () => { sec.image_placement.position = posSel.value; paint(); onAnyEdit(); });
+
+      row.appendChild(tog); row.appendChild(maxCell); row.appendChild(posCell);
+      body.appendChild(title); body.appendChild(row); body.appendChild(status);
+      wrap.appendChild(icon); wrap.appendChild(body);
+      paint();
+      return wrap;
+    }
+
+    // ---- Render / rerender ---------------------------------------------------
+    function buildOriginalIndex() {
+      originalIndex = { g: {}, c: {} };
+      (originalTemplate.guidance.sections || []).forEach(s => { originalIndex.g[s.section_id] = s; });
+      (originalTemplate.content_structure.sections || []).forEach(s => { originalIndex.c[s.section_id] = s; });
+    }
+
     function renderResults(t) {
       lastTemplate = t;
-      originalTemplate = JSON.parse(JSON.stringify(t));
+      originalTemplate = clone(t);
+      buildOriginalIndex();
+      rerender();
+      $('results').classList.add('show');
+      $('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function rerender() {
+      normalizeOrder(lastTemplate);
       editableRegistry = [];
       arrayValidators = [];
-
-      const g = t.guidance || {};
+      const t = lastTemplate;
+      const g = t.guidance;
 
       // Summary stats (read-only identifiers)
       const stats = [
@@ -712,40 +905,48 @@
       // Top / scripts block (editable)
       const scripts = $('scripts'); scripts.innerHTML = '';
       const topCard = document.createElement('div'); topCard.className = 'section';
-      topCard.appendChild(textField('Title', ['title'], { required: true }));
-      topCard.appendChild(textField('Description', ['template_description'], { required: true, multiline: true }));
-      topCard.appendChild(textField('Business name', ['business_name'], { placeholder: '(optional)' }));
-      topCard.appendChild(textField('Job address', ['job_address'], { placeholder: '(optional)' }));
-      topCard.appendChild(textField('Intro script', ['guidance', 'intro_script'], { required: true, multiline: true }));
-      topCard.appendChild(textField('Outro script', ['guidance', 'outro_script'], { required: true, multiline: true }));
+      topCard.appendChild(textField('Title', ['title'], { required: true, origValue: originalTemplate.title }));
+      topCard.appendChild(textField('Description', ['template_description'], { required: true, multiline: true, origValue: originalTemplate.template_description }));
+      topCard.appendChild(textField('Business name', ['business_name'], { placeholder: '(optional)', origValue: originalTemplate.business_name }));
+      topCard.appendChild(textField('Job address', ['job_address'], { placeholder: '(optional)', origValue: originalTemplate.job_address }));
+      topCard.appendChild(textField('Intro script', ['guidance', 'intro_script'], { required: true, multiline: true, origValue: originalTemplate.guidance.intro_script }));
+      topCard.appendChild(textField('Outro script', ['guidance', 'outro_script'], { required: true, multiline: true, origValue: originalTemplate.guidance.outro_script }));
       scripts.appendChild(topCard);
 
-      // Sections (editable). Display in capture order; bind to real array indices.
+      // Section blocks (already normalized to capture order == array order)
       const cIndexById = {};
-      ((t.content_structure || {}).sections || []).forEach((s, i) => { cIndexById[s.section_id] = i; });
-      const gOrder = (g.sections || [])
-        .map((s, gi) => ({ s, gi }))
-        .sort((a, b) => a.s.capture_order - b.s.capture_order);
+      (t.content_structure.sections || []).forEach((s, i) => { cIndexById[s.section_id] = i; });
 
       const host = $('sections'); host.innerHTML = '';
-      gOrder.forEach(({ s, gi }) => {
-        const ci = cIndexById[s.section_id];
+      g.sections.forEach((s, gi) => {
+        const id = s.section_id;
+        const ci = cIndexById[id];
+        const gOrig = originalIndex.g[id] || {};
+        const cOrig = originalIndex.c[id] || {};
         const card = document.createElement('div'); card.className = 'section';
+        card.dataset.sectionId = id;
 
         const head = document.createElement('div'); head.className = 'head';
+        const handle = document.createElement('span'); handle.className = 'draghandle'; handle.textContent = '⠿'; handle.title = 'Drag to reorder'; handle.setAttribute('draggable', 'true');
         const order = document.createElement('span'); order.className = 'order'; order.textContent = s.capture_order;
-        const req = document.createElement('span');
-        req.className = 'pill ' + (s.required ? 'req' : 'opt');
-        req.textContent = s.required ? 'Required' : 'Optional';
-        head.appendChild(order);
-        head.appendChild(titleEl(['guidance', 'sections', gi, 'title']));
-        head.appendChild(req);
+        const req = document.createElement('span'); req.className = 'pill ' + (s.required ? 'req' : 'opt'); req.textContent = s.required ? 'Required' : 'Optional';
+        const spacer = document.createElement('span'); spacer.className = 'head-spacer';
+        const del = document.createElement('button'); del.className = 'delbtn'; del.textContent = 'Delete'; del.title = 'Delete section';
+        del.addEventListener('click', () => deleteSection(id));
+        head.append(handle, order, titleEl(['guidance', 'sections', gi, 'title'], gOrig.title), req, spacer, del);
         card.appendChild(head);
 
-        card.appendChild(textField('Voice prompt', ['guidance', 'sections', gi, 'voice_prompt'], { required: true, multiline: true }));
-        card.appendChild(textField('On-screen text', ['guidance', 'sections', gi, 'on_screen_text'], { required: true }));
-        card.appendChild(textField('Worker instructions', ['guidance', 'sections', gi, 'worker_instructions'], { required: true, multiline: true }));
-        card.appendChild(textField('Success criteria', ['guidance', 'sections', gi, 'success_criteria'], { required: true, multiline: true }));
+        // Drag-and-drop reorder (handle initiates; card is the drop zone).
+        handle.addEventListener('dragstart', (e) => { dragId = id; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', id); card.classList.add('dragging'); });
+        handle.addEventListener('dragend', () => { card.classList.remove('dragging'); dragId = null; document.querySelectorAll('.section.drag-over').forEach(el => el.classList.remove('drag-over')); });
+        card.addEventListener('dragover', (e) => { if (dragId && dragId !== id) { e.preventDefault(); card.classList.add('drag-over'); } });
+        card.addEventListener('dragleave', () => card.classList.remove('drag-over'));
+        card.addEventListener('drop', (e) => { e.preventDefault(); card.classList.remove('drag-over'); if (dragId && dragId !== id) moveSection(dragId, id); });
+
+        card.appendChild(textField('Voice prompt', ['guidance', 'sections', gi, 'voice_prompt'], { required: true, multiline: true, origValue: gOrig.voice_prompt }));
+        card.appendChild(textField('On-screen text', ['guidance', 'sections', gi, 'on_screen_text'], { required: true, origValue: gOrig.on_screen_text }));
+        card.appendChild(textField('Worker instructions', ['guidance', 'sections', gi, 'worker_instructions'], { required: true, multiline: true, origValue: gOrig.worker_instructions }));
+        card.appendChild(textField('Success criteria', ['guidance', 'sections', gi, 'success_criteria'], { required: true, multiline: true, origValue: gOrig.success_criteria }));
         card.appendChild(chipsField('Suggested phrases', ['guidance', 'sections', gi, 'suggested_phrases'], { addLabel: '+ Add phrase', newValue: 'new phrase', min: 1 }));
 
         const cells = [
@@ -756,21 +957,27 @@
         card.appendChild(numRow(cells));
 
         if (ci != null) {
-          card.appendChild(textField('Writer instructions', ['content_structure', 'sections', ci, 'writer_instructions'], { required: true, multiline: true }));
-          card.appendChild(textField('Default text', ['content_structure', 'sections', ci, 'default_text'], { required: true, multiline: true }));
-          card.appendChild(textField('Tone', ['content_structure', 'sections', ci, 'tone'], { required: true }));
+          card.appendChild(photoSlot(ci));
+          card.appendChild(textField('Writer instructions', ['content_structure', 'sections', ci, 'writer_instructions'], { required: true, multiline: true, origValue: cOrig.writer_instructions }));
+          card.appendChild(textField('Default text', ['content_structure', 'sections', ci, 'default_text'], { required: true, multiline: true, origValue: cOrig.default_text }));
+          card.appendChild(textField('Tone', ['content_structure', 'sections', ci, 'tone'], { required: true, origValue: cOrig.tone }));
           card.appendChild(chipsField('Required fields', ['content_structure', 'sections', ci, 'fields'], { addLabel: '+ Add field', newValue: 'new_field', chipClass: 'fchip', textClass: 'ftext', container: 'fields-list', min: 1 }));
         }
 
         host.appendChild(card);
       });
 
+      // Add-section button doubles as a "drop at end" target for reordering.
+      const addBtn = document.createElement('button'); addBtn.type = 'button'; addBtn.className = 'add-section'; addBtn.textContent = '+ Add section';
+      addBtn.addEventListener('click', addSection);
+      addBtn.addEventListener('dragover', (e) => { if (dragId) { e.preventDefault(); addBtn.classList.add('drag-over'); } });
+      addBtn.addEventListener('dragleave', () => addBtn.classList.remove('drag-over'));
+      addBtn.addEventListener('drop', (e) => { e.preventDefault(); addBtn.classList.remove('drag-over'); if (dragId) moveSection(dragId, null); });
+      host.appendChild(addBtn);
+
       syncJson();
       updateDirty();
       runValidation();
-
-      $('results').classList.add('show');
-      $('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
     function runValidation() {
@@ -863,7 +1070,8 @@
 
     $('resetBtn').addEventListener('click', () => {
       if (!originalTemplate) return;
-      renderResults(JSON.parse(JSON.stringify(originalTemplate)));
+      lastTemplate = clone(originalTemplate);
+      rerender();
       toast('Reverted all edits');
     });
 

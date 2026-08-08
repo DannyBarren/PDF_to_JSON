@@ -116,6 +116,25 @@ def clone_valid_template():
 
 
 @pytest.fixture()
+def pdf_with_image(tmp_path: Path) -> Path:
+    """A PDF with a heading followed by an embedded image (for image detection)."""
+    fitz = pytest.importorskip("fitz")
+    pdf_path = tmp_path / "withimg.pdf"
+    doc = fitz.open()
+    page = doc.new_page()
+    page.insert_text((72, 72), "Roof Condition", fontsize=20)
+    page.insert_text((72, 104), "Description of the roof field and its wear.", fontsize=11)
+    pix = fitz.Pixmap(fitz.csRGB, fitz.IRect(0, 0, 48, 48))
+    pix.set_rect(pix.irect, (200, 60, 60))
+    page.insert_image(fitz.Rect(72, 150, 220, 280), pixmap=pix)
+    page.insert_text((72, 340), "Interior Notes", fontsize=20)
+    page.insert_text((72, 372), "No photos were taken indoors.", fontsize=11)
+    doc.save(pdf_path)
+    doc.close()
+    return pdf_path
+
+
+@pytest.fixture()
 def sample_pdf(tmp_path: Path) -> Path:
     """Create a small text-native PDF for extraction tests (requires pymupdf)."""
     fitz = pytest.importorskip("fitz")

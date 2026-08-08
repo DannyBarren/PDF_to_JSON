@@ -34,6 +34,14 @@ class ExtractedDocument:
     detected_headings: list[str] = field(default_factory=list)
     engine: str = "unknown"
     is_probably_scanned: bool = False
+    # Image-presence metadata (drives show_photo / image_placement downstream).
+    image_count: int = 0
+    pages_with_images: list[int] = field(default_factory=list)
+    # [{"title": <heading>, "page": <int>, "images": <int>}] for headings that
+    # have embedded images associated with them (by nearest preceding heading).
+    heading_images: list[dict[str, Any]] = field(default_factory=list)
+    # Images that could not be tied to any heading.
+    unassociated_images: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -42,12 +50,26 @@ class ExtractedDocument:
             "engine": self.engine,
             "is_probably_scanned": self.is_probably_scanned,
             "detected_headings": self.detected_headings,
+            "image_count": self.image_count,
+            "pages_with_images": self.pages_with_images,
+            "heading_images": self.heading_images,
+            "unassociated_images": self.unassociated_images,
             "markdown": self.markdown,
         }
 
     @property
     def char_count(self) -> int:
         return len(self.raw_text)
+
+    @property
+    def image_hints(self) -> dict[str, Any]:
+        """Structured image-presence summary for the generation stage."""
+        return {
+            "total_images": self.image_count,
+            "pages_with_images": self.pages_with_images,
+            "headings": self.heading_images,
+            "unassociated_images": self.unassociated_images,
+        }
 
 
 def extract_pdf(path: str | Path) -> ExtractedDocument:
@@ -98,7 +120,10 @@ def extract_pdf(path: str | Path) -> ExtractedDocument:
 def _extract_with_pymupdf(pdf_path: Path) -> ExtractedDocument:
     import fitz  # type: ignore  # PyMuPDF
 
-    lines_with_size: list[tuple[str, float, int]] = []
+    # (text, font_size, page(1-based), y0)
+    lines_with_pos: list[tuple[str, float, int, float]] = []
+    # (page(1-based), y0) for each embedded image / drawing xobject
+    image_positions: list[tuple[int, float]] = []
     raw_parts: list[str] = []
 
     with fitz.open(pdf_path) as doc:  # type: ignore[attr-defined]
@@ -107,6 +132,11 @@ def _extract_with_pymupdf(pdf_path: Path) -> ExtractedDocument:
             page = doc.load_page(page_index)
             data = page.get_text("dict")
             for block in data.get("blocks", []):
+                btype = block.get("type", 0)
+                if btype == 1:  # image block
+                    bbox = block.get("bbox", [0, 0, 0, 0])
+                    image_positions.append((page_index + 1, float(bbox[1])))
+                    continue
                 for line in block.get("lines", []):
                     spans = line.get("spans", [])
                     if not spans:
@@ -115,11 +145,29 @@ def _extract_with_pymupdf(pdf_path: Path) -> ExtractedDocument:
                     if not text:
                         continue
                     max_size = max(float(span.get("size", 0.0)) for span in spans)
-                    lines_with_size.append((text, max_size, page_index + 1))
+                    y0 = float(line.get("bbox", [0, 0, 0, 0])[1])
+                    lines_with_pos.append((text, max_size, page_index + 1, y0))
                     raw_parts.append(text)
 
+            # Fallback: some PDFs expose images only via get_images(), not as
+            # image blocks. Count any not already seen positionally.
+            try:
+                img_list = page.get_images(full=True)
+            except Exception:  # pragma: no cover - defensive
+                img_list = []
+            block_images_on_page = sum(1 for p, _ in image_positions if p == page_index + 1)
+            extra = len(img_list) - block_images_on_page
+            for _ in range(max(0, extra)):
+                # Unknown y position; place at top so it associates with the
+                # first heading on the page.
+                image_positions.append((page_index + 1, 0.0))
+
     raw_text = "\n".join(raw_parts)
-    markdown, headings = _lines_to_markdown(lines_with_size, page_count)
+    markdown, headings, heading_positions = _lines_to_markdown(
+        lines_with_pos, page_count
+    )
+    heading_images, unassociated = _associate_images(heading_positions, image_positions)
+    pages_with_images = sorted({p for p, _ in image_positions})
 
     return ExtractedDocument(
         source_path=str(pdf_path),
@@ -129,20 +177,28 @@ def _extract_with_pymupdf(pdf_path: Path) -> ExtractedDocument:
         detected_headings=headings,
         engine="pymupdf",
         is_probably_scanned=len(raw_text.strip()) < 20,
+        image_count=len(image_positions),
+        pages_with_images=pages_with_images,
+        heading_images=heading_images,
+        unassociated_images=unassociated,
     )
 
 
 def _lines_to_markdown(
-    lines_with_size: list[tuple[str, float, int]], page_count: int
-) -> tuple[str, list[str]]:
-    """Convert (text, font_size, page) tuples into Markdown with headings."""
-    if not lines_with_size:
-        return "", []
+    lines_with_pos: list[tuple[str, float, int, float]], page_count: int
+) -> tuple[str, list[str], list[tuple[str, int, float]]]:
+    """Convert (text, font_size, page, y0) tuples into Markdown with headings.
 
-    sizes = [size for _, size, _ in lines_with_size if size > 0]
+    Returns (markdown, heading_texts, heading_positions) where heading_positions
+    is [(title, page, y0), ...] used to associate images with headings.
+    """
+    if not lines_with_pos:
+        return "", [], []
+
+    sizes = [size for _, size, _, _ in lines_with_pos if size > 0]
     if not sizes:
-        body = "\n".join(text for text, _, _ in lines_with_size)
-        return body, []
+        body = "\n".join(text for text, _, _, _ in lines_with_pos)
+        return body, [], []
 
     body_size = statistics.median(sizes)
     # A line is a heading if noticeably larger than body text and short-ish.
@@ -150,9 +206,10 @@ def _lines_to_markdown(
 
     out_lines: list[str] = []
     headings: list[str] = []
+    heading_positions: list[tuple[str, int, float]] = []
     current_page = 0
 
-    for text, size, page in lines_with_size:
+    for text, size, page, y0 in lines_with_pos:
         if page != current_page:
             current_page = page
             if page > 1:
@@ -169,11 +226,54 @@ def _lines_to_markdown(
             out_lines.append("")
             out_lines.append(f"{level} {text}")
             headings.append(text)
+            heading_positions.append((text, page, y0))
         else:
             out_lines.append(text)
 
     markdown = "\n".join(out_lines).strip()
-    return markdown, headings
+    return markdown, headings, heading_positions
+
+
+def _associate_images(
+    heading_positions: list[tuple[str, int, float]],
+    image_positions: list[tuple[int, float]],
+) -> tuple[list[dict[str, Any]], int]:
+    """Attach each image to the nearest preceding heading (in reading order).
+
+    Returns (heading_images, unassociated_count) where heading_images is
+    [{"title", "page", "images"}] for headings that gained >= 1 image.
+    """
+    if not image_positions:
+        return [], 0
+
+    # Sort headings by (page, y) so "preceding" means earlier in reading order.
+    ordered = sorted(
+        enumerate(heading_positions), key=lambda h: (h[1][1], h[1][2])
+    )
+    counts: dict[int, int] = {}
+    unassociated = 0
+
+    for img_page, img_y in image_positions:
+        best_idx: int | None = None
+        best_key: tuple[int, float] | None = None
+        for orig_idx, (_title, h_page, h_y) in ordered:
+            key = (h_page, h_y)
+            if key <= (img_page, img_y):
+                if best_key is None or key > best_key:
+                    best_key = key
+                    best_idx = orig_idx
+            else:
+                break
+        if best_idx is None:
+            unassociated += 1
+        else:
+            counts[best_idx] = counts.get(best_idx, 0) + 1
+
+    heading_images: list[dict[str, Any]] = []
+    for idx, count in sorted(counts.items(), key=lambda kv: kv[0]):
+        title, page, _y = heading_positions[idx]
+        heading_images.append({"title": title, "page": page, "images": count})
+    return heading_images, unassociated
 
 
 # --------------------------------------------------------------------------- #
@@ -184,6 +284,8 @@ def _extract_with_pdfplumber(pdf_path: Path) -> ExtractedDocument:
 
     raw_parts: list[str] = []
     md_parts: list[str] = []
+    image_count = 0
+    pages_with_images: list[int] = []
 
     with pdfplumber.open(pdf_path) as pdf:
         page_count = len(pdf.pages)
@@ -193,6 +295,10 @@ def _extract_with_pdfplumber(pdf_path: Path) -> ExtractedDocument:
             if page_index > 0:
                 md_parts.append(f"\n<!-- page {page_index + 1} -->")
             md_parts.append(text)
+            page_images = list(getattr(page, "images", []) or [])
+            if page_images:
+                image_count += len(page_images)
+                pages_with_images.append(page_index + 1)
 
     raw_text = "\n".join(raw_parts)
     markdown = "\n".join(md_parts).strip()
@@ -205,4 +311,6 @@ def _extract_with_pdfplumber(pdf_path: Path) -> ExtractedDocument:
         detected_headings=[],
         engine="pdfplumber",
         is_probably_scanned=len(raw_text.strip()) < 20,
+        image_count=image_count,
+        pages_with_images=pages_with_images,
     )

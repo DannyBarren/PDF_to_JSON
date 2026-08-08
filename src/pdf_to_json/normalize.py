@@ -26,7 +26,14 @@ from .schema import (
     SEVERITY_LEVELS,
 )
 
-__all__ = ["normalize_template"]
+__all__ = ["normalize_template", "apply_image_hints"]
+
+_STOPWORDS = {
+    "and", "or", "the", "a", "an", "of", "for", "to", "in", "on", "at", "with",
+    "amp", "section", "report", "inspection", "general", "details", "detail",
+    "overview", "condition", "conditions", "summary", "recommendation",
+    "recommendations", "job", "site", "system", "area", "field",
+}
 
 _DOCUMENT_CLASSES = {
     "inspection_report",
@@ -133,6 +140,82 @@ def _remap_severity_map(
         result.setdefault(level, defaults[level])
     # Return in canonical order.
     return {level: result[level] for level in SEVERITY_LEVELS}
+
+
+def _tokens(text: Any) -> set[str]:
+    if not isinstance(text, str):
+        return set()
+    words = re.findall(r"[a-z0-9]+", text.lower())
+    return {w for w in words if len(w) >= 3 and w not in _STOPWORDS}
+
+
+def _best_content_match(
+    heading_tokens: set[str], content_sections: list[dict[str, Any]]
+) -> dict[str, Any] | None:
+    """Find the content section whose title best matches a source heading."""
+    if not heading_tokens:
+        return None
+    best: dict[str, Any] | None = None
+    best_score = 0.0
+    for sec in content_sections:
+        if not isinstance(sec, dict):
+            continue
+        sec_tokens = _tokens(sec.get("title")) | _tokens(sec.get("section_id"))
+        if not sec_tokens:
+            continue
+        overlap = heading_tokens & sec_tokens
+        if not overlap:
+            continue
+        # Score by overlap relative to the (smaller) heading token set.
+        score = len(overlap) / max(1, len(heading_tokens))
+        if score > best_score:
+            best_score = score
+            best = sec
+    # Require at least one meaningful shared token.
+    return best if best_score > 0 else None
+
+
+def apply_image_hints(data: dict[str, Any], image_hints: dict[str, Any] | None) -> dict[str, Any]:
+    """Deterministically force photo settings where the source had images.
+
+    For every source heading that had embedded images, the best-matching
+    content_structure section is set to ``show_photo=true`` with a required
+    image_placement and a ``max_images`` at least as large as the detected count
+    (capped). This runs on top of the LLM's judgement so image presence is never
+    missed. Returns the same dict (mutated).
+    """
+    if not isinstance(data, dict) or not image_hints:
+        return data
+    headings = image_hints.get("headings") or []
+    if not headings:
+        return data
+
+    content = data.get("content_structure")
+    if not isinstance(content, dict):
+        return data
+    sections = content.get("sections")
+    if not isinstance(sections, list):
+        return data
+
+    for heading in headings:
+        if not isinstance(heading, dict):
+            continue
+        count = _clamp_int(heading.get("images"), 1, 10, 1)
+        match = _best_content_match(_tokens(heading.get("title")), sections)
+        if match is None:
+            continue
+        match["show_photo"] = True
+        ip = match.get("image_placement")
+        if not isinstance(ip, dict):
+            ip = {}
+            match["image_placement"] = ip
+        ip["required"] = True
+        ip.setdefault("position", "after_summary")
+        ip.setdefault("caption_style", "narration_excerpt_with_timestamp")
+        existing = ip.get("max_images")
+        existing = existing if isinstance(existing, int) else 0
+        ip["max_images"] = _clamp_int(max(existing, count), 1, 10, 3)
+    return data
 
 
 def _normalize_severity(styling: Any) -> None:

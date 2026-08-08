@@ -116,6 +116,7 @@ repair" -> major, "plan to repair" -> moderate, "monitor/cosmetic" -> minor,
 - Every section_id in guidance.sections MUST appear in content_structure.sections and vice versa (perfect 1:1 mirroring, same ids).
 - capture_order must be a complete sequential sequence 1..N (no gaps, no duplicates).
 - Every numeric field must be within range: min_marks >= 0, estimated_seconds >= 1, min_summary_words 45-70, image_placement.max_images between 1 and 10 (never 0).
+- IMAGE PRESENCE: if the SOURCE IMAGE PRESENCE data (below) shows a heading/section had embedded images, the corresponding section MUST set show_photo=true, image_placement.required=true, and max_images to at least the detected image count (capped at 8). Do not set show_photo=false for a section that clearly showed photos in the source.
 - Order sections to follow the logical flow of the source PDF.
 - Infer document_class correctly from the content (inspection_report, estimate, invoice, compliance, work_order, or custom).
 - Keep section count reasonable (usually 6-12). Merge trivial items; split only when clearly distinct.
@@ -207,12 +208,45 @@ content section:
 """
 
 
+def build_image_presence_block(image_hints: dict | None) -> str:
+    """Render the SOURCE IMAGE PRESENCE hint block for the prompt."""
+    if not image_hints:
+        return ""
+    total = image_hints.get("total_images", 0)
+    if not total:
+        return "\n## SOURCE IMAGE PRESENCE\nNo embedded images were detected in the source PDF.\n"
+
+    lines = [
+        "\n## SOURCE IMAGE PRESENCE",
+        f"The source PDF contains {total} embedded image(s).",
+    ]
+    pages = image_hints.get("pages_with_images") or []
+    if pages:
+        lines.append(f"Pages with images: {pages}.")
+    headings = image_hints.get("headings") or []
+    if headings:
+        lines.append(
+            "Headings that had images near them (set show_photo=true and "
+            "image_placement.required=true for the matching sections):"
+        )
+        for h in headings[:40]:
+            lines.append(f"- \"{h.get('title')}\" — {h.get('images')} image(s)")
+    unassoc = image_hints.get("unassociated_images", 0)
+    if unassoc:
+        lines.append(
+            f"{unassoc} image(s) could not be tied to a specific heading; treat "
+            "visual/field sections as photo-bearing."
+        )
+    return "\n".join(lines) + "\n"
+
+
 def build_user_prompt(
     markdown: str,
     *,
     page_count: int,
     detected_headings: list[str] | None = None,
     filename: str | None = None,
+    image_hints: dict | None = None,
 ) -> str:
     """Assemble the user prompt from extracted content."""
     headings = detected_headings or []
@@ -225,12 +259,14 @@ def build_user_prompt(
         )
 
     name_hint = f"\nSource filename: {filename}" if filename else ""
+    image_block = build_image_presence_block(image_hints)
 
     return (
         f"{FEW_SHOT_EXAMPLE}\n\n"
         "## SOURCE DOCUMENT\n"
         f"The following is the extracted text of a {page_count}-page PDF."
-        f"{name_hint}{heading_hint}\n"
+        f"{name_hint}{heading_hint}"
+        f"{image_block}\n"
         "Design the ReportTemplate now, based ONLY on this content.\n\n"
         "----- BEGIN EXTRACTED DOCUMENT -----\n"
         f"{markdown}\n"

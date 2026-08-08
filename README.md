@@ -43,9 +43,9 @@ against that schema, JobDoc can consume it.
 
 | Stage | Module | Responsibility |
 | ----- | ------ | -------------- |
-| Extract | `extractor.py` | PDF → clean, hierarchical Markdown (+ page count, headings). Prefers PyMuPDF, falls back to pdfplumber. No OCR/CV required. |
+| Extract | `extractor.py` | PDF → clean, hierarchical Markdown (+ page count, headings, and **image-presence metadata**: which pages/headings contain embedded images). Prefers PyMuPDF, falls back to pdfplumber. No OCR/CV required. |
 | Generate | `generator.py` + `prompts.py` | Extracted content → template dict via a frontier LLM in JSON mode. Backend is injectable for testing. |
-| Normalize | `normalize.py` | Best-effort repair of small, mechanically-fixable LLM quirks (out-of-range numbers like `max_images`, `capture_order` gaps, unknown `document_class`, empty `suggested_phrases`) before validation. Never invents structure or masks real errors. |
+| Normalize | `normalize.py` | Best-effort repair of small, mechanically-fixable LLM quirks (out-of-range numbers like `max_images`, `capture_order` gaps, unknown `document_class`, empty `suggested_phrases`) before validation, plus `apply_image_hints()` which **deterministically forces `show_photo` / `image_placement`** for sections whose source heading contained images. Never invents structure or masks real errors. |
 | Validate | `validator.py` + `schema.py` | Strict Pydantic v2 models + section-mirroring / quality checks with human-readable errors. |
 | Orchestrate | `pipeline.py` | `extract → generate → normalize → validate`. **Never returns an invalid template.** |
 | Interfaces | `cli.py`, `api.py` | Typer CLI and FastAPI service. |
@@ -118,6 +118,13 @@ From the page you can:
   "edited" marker with a one-click **revert**, and **Reset all edits** restores
   the original. Emptying a required field shows a validation warning and disables
   download until fixed.
+- **Restructure visually** — sections are drag-to-reorder blocks (drag the ⠿
+  handle), each with a **Delete** button and an **+ Add section** button. Any
+  structural change keeps `guidance` and `content_structure` perfectly mirrored
+  and rewrites `capture_order` to a clean `1..N`.
+- **Configure photos per section** — each section has a **Photo slot** control to
+  toggle whether photos are required (`show_photo` + `image_placement.required`),
+  set `max_images`, and choose `image_placement.position` — no raw JSON needed.
 - **Download JSON** (prominent button) to export the current, edited template as
   `{report_type}_template.json`, ready to drop into JobDoc.
 - See a live **service/health indicator** (shows whether your `OPENAI_API_KEY`
@@ -334,7 +341,7 @@ The schema and validator tests run **without an API key** (the pipeline test use
 a fake LLM completer):
 
 ```bash
-pytest            # 66 tests, all offline (schema, validator, normalize, generator, pipeline, API, UI)
+pytest            # 72 tests, all offline (schema, validator, normalize, generator, images, pipeline, API, UI)
 ```
 
 Project layout:
