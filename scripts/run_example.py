@@ -25,12 +25,13 @@ sys.path.insert(0, str(ROOT / "src"))
 from pdf_to_json.pipeline import TranslationPipeline  # noqa: E402
 
 
+# Synthetic demo copy only. Do not put real client names, addresses, or documents here.
 SAMPLE_PDF_TEXT = """\
-MasterCraft Roofing
+Example Roofing Co.
 Commercial Low-Slope Roof Inspection Report
 
 Site & Job Details
-Property: 333 S Tamiami Trail. Roof system: gravel-surfaced built-up roof (BUR),
+Property: 100 Example Parkway. Roof system: gravel-surfaced built-up roof (BUR),
 approx. 6,500 sq ft, estimated 18 years old.
 
 Roof Access & General Overview
@@ -191,7 +192,7 @@ _OFFLINE_TEMPLATE = {
                 "Site & job details",
                 "Confirm and say the property address out loud. From your work order or a quick look at the roof, state the roof system type (for example gravel-surfaced built-up roof, modified bitumen, or single-ply TPO), the approximate square footage, and the estimated age in years. Take one photo of the building front and one of the point where you accessed the roof.",
                 "The property address and roof system type are stated out loud, and at least one photo of the building and one of the roof access point are captured.",
-                ["This is a gravel-surfaced built-up roof", "Roof is about six thousand five hundred square feet", "Estimated eighteen years old", "Address is 333 South Tamiami Trail", "Accessed through the interior roof hatch"],
+                ["This is a gravel-surfaced built-up roof", "Roof is about six thousand five hundred square feet", "Estimated eighteen years old", "Address is 100 Example Parkway", "Accessed through the interior roof hatch"],
                 120, min_marks=1,
             ),
             _g(

@@ -142,10 +142,10 @@ def sample_pdf(tmp_path: Path) -> Path:
     doc = fitz.open()
     page = doc.new_page()
     text = (
-        "ACME Property Inspections\n"
+        "Example Inspections LLC\n"
         "Roof Inspection Report\n\n"
         "Site & Job Details\n"
-        "Address: 123 Main St. Inspector: J. Smith.\n\n"
+        "Address: 100 Example Parkway. Inspector: A. Technician.\n\n"
         "Roof Condition\n"
         "Shingles show moderate wear. Two cracked tiles near the ridge.\n\n"
         "Summary & Recommendations\n"
