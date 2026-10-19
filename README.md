@@ -1,381 +1,224 @@
 # PDF → JSON Template Translator
 
-Turn a real-world trades PDF (inspection report, estimate, invoice, compliance
-checklist, work order, …) into a **fully valid GenerSwift `ReportTemplate` JSON
-(`schema_version: 3`)** that can be dropped straight into the main JobDoc app
-with zero further editing required for basic use.
+Turn a trades PDF (inspection report, estimate, invoice, compliance checklist,
+work order) into a **valid GenerSwift `ReportTemplate` JSON (`schema_version: 3`)**
+that JobDoc can consume without a second human-authoring pass for basic use.
 
-```
-report.pdf  ──►  extract  ──►  LLM reasoning  ──►  strict validation  ──►  template.json
-```
+This repository is a **prototype**. It is released under a **strict proprietary
+license** — see [`LICENSE.md`](LICENSE.md). The previous README incorrectly
+labeled it MIT; that was a metadata error, not a grant of rights.
 
----
+## Problem
 
-## What this tool does
+Field businesses already have static PDFs. JobDoc needs those documents as
+**guided, voice-driven capture templates**: ordered sections, day-one worker
+instructions, checkable success criteria, writer instructions, and photo slots.
 
-Static PDFs are dead documents. GenerSwift JobDoc turns work into **guided,
-voice-driven capture sessions** that a brand-new technician can follow, and then
-has a writing agent author a professional report from what was captured.
+Hand-building that JSON does not scale, and unconstrained LLM output is not a
+contract. This tool treats translation as a **data pipeline with a hard schema
+gate**: extract → generate → normalize → validate, and **never return an invalid
+template**.
 
-This tool bridges the two: it reads the PDF a business already uses and designs
-the matching `ReportTemplate`, including:
+The only runtime contract with JobDoc is the isolated schema in
+[`src/pdf_to_json/schema.py`](src/pdf_to_json/schema.py). There is no import of
+the JobDoc / `report_automation` codebase.
 
-- **Metadata** — `document_class`, `report_type`, `title`, `template_description`.
-- **`guidance`** — an intro/outro script plus ordered capture sections, each with
-  a `voice_prompt`, `on_screen_text`, day-one `worker_instructions`, checkable
-  `success_criteria`, natural `suggested_phrases`, `min_marks`, and
-  `estimated_seconds`.
-- **`content_structure`** — per-section `writer_instructions`, required `fields`,
-  professional `default_text`, `min_summary_words`, `image_placement`, and
-  `layout_hints` for the report-writing agent.
-- **`pdf_styling`** — sensible defaults (colors, fonts, headers/footers,
-  severity colors and bands).
-
-## How it relates to GenerSwift JobDoc
-
-**This system is completely isolated.** It has **zero** runtime dependency on the
-`report_automation` / JobDoc codebase. The *only* contract between the two
-systems is the gold-standard schema in
-[`src/pdf_to_json/schema.py`](src/pdf_to_json/schema.py). If the output validates
-against that schema, JobDoc can consume it.
+Example PDFs and addresses in this repo are **synthetic fixtures**, not client
+documents.
 
 ## Architecture
 
-| Stage | Module | Responsibility |
-| ----- | ------ | -------------- |
-| Extract | `extractor.py` | PDF → clean, hierarchical Markdown (+ page count, headings, and **image-presence metadata**: which pages/headings contain embedded images). Prefers PyMuPDF, falls back to pdfplumber. No OCR/CV required. |
-| Generate | `generator.py` + `prompts.py` | Extracted content → template dict via a frontier LLM in JSON mode. Backend is injectable for testing. |
-| Normalize | `normalize.py` | Best-effort repair of small, mechanically-fixable LLM quirks (out-of-range numbers like `max_images`, `capture_order` gaps, unknown `document_class`, empty `suggested_phrases`) before validation, plus `apply_image_hints()` which **deterministically forces `show_photo` / `image_placement`** for sections whose source heading contained images. Never invents structure or masks real errors. |
-| Validate | `validator.py` + `schema.py` | Strict Pydantic v2 models + section-mirroring / quality checks with human-readable errors. |
-| Orchestrate | `pipeline.py` | `extract → generate → normalize → validate`. **Never returns an invalid template.** |
-| Interfaces | `cli.py`, `api.py` | Typer CLI and FastAPI service. |
-
----
-
-## Installation
-
-Requires **Python 3.11+**.
-
-```bash
-# From the repository root, (recommended) create and activate a virtualenv, then:
-pip install -e ".[dev]"
+```mermaid
+flowchart LR
+  PDF["Source PDF"] --> EX["extractor.py<br/>PyMuPDF, pdfplumber fallback"]
+  EX --> MD["Markdown + headings<br/>+ image-presence hints"]
+  MD --> GEN["generator.py + prompts.py<br/>JSON-mode LLM"]
+  GEN --> RAW["Raw template dict"]
+  RAW --> NORM["normalize.py<br/>mechanical repairs"]
+  NORM --> HINT["apply_image_hints<br/>force photo slots"]
+  HINT --> VAL["validator.py + schema.py<br/>hard errors vs quality warnings"]
+  VAL --> JSON["ReportTemplate JSON"]
+  JSON --> CLI["cli.py"]
+  JSON --> API["api.py + static UI"]
 ```
 
-This installs the `pdf-to-json` CLI entry point. You can also run the tool with
-`python -m pdf_to_json`.
+| Stage | Module | Role |
+| ----- | ------ | ---- |
+| Extract | `extractor.py` | PDF → hierarchical Markdown, page count, headings, image-presence metadata. Prefers PyMuPDF; falls back to pdfplumber. No OCR. |
+| Generate | `generator.py`, `prompts.py` | Extracted text → template dict via JSON-mode chat completion. Completer is injectable so tests never call a network LLM. |
+| Normalize | `normalize.py` | Repair mechanically-fixable LLM quirks (ranges, `capture_order`, severity aliases, empty phrases). `apply_image_hints()` forces `show_photo` / `image_placement` when the source heading had images. Does not invent sections. |
+| Validate | `validator.py`, `schema.py` | Strict Pydantic v2 models plus 1:1 section mirroring. Quality issues are **warnings**, not rejects. |
+| Orchestrate | `pipeline.py` | `extract → generate → normalize → validate`. Invalid output is an error. |
+| Interfaces | `cli.py`, `api.py`, `static/index.html` | Typer CLI, FastAPI, and a same-origin browser UI. |
 
-## Configure your API key
+## Design trade-offs
 
-The generation stage uses OpenAI by default.
+These are deliberate, not leftovers:
+
+- **Text extraction + LLM, not vision/OCR.** Native-text PDFs are the MVP. Scanned
+  packets fail closed with a clear error instead of shipping a hallucinated
+  template. Cost and ops stay small; the failure mode is honest.
+- **Isolated schema copy, not a shared JobDoc package.** Decouples this tool from
+  the product repo. Drift is a real risk: if JobDoc's gold schema changes, this
+  copy must be updated by hand.
+- **Normalize mechanical errors; do not auto-retry generation.** Out-of-range
+  `max_images` should not discard an otherwise good template. Broken mirroring
+  still fails. There is no "ask the model again" loop, so a bad generation is
+  cheap and deterministic to debug.
+- **Quality checks are warnings.** Thin `success_criteria` should not block a
+  schema-valid template a human can edit in the UI. The prompt carries the
+  quality bar; validation enforces the contract.
+- **JSON mode Chat Completions, not structured-output / tool-calling.** One
+  object, schema enforced after the fact. Simpler backend swap; weaker
+  compile-time guarantees than a JSON Schema response format.
+- **Default CORS `*`.** Convenient for a prototype UI. Production should pin
+  `PDF_TO_JSON_CORS_ORIGINS`.
+- **Always-on ASGI over serverless.** `vercel.json` caps `maxDuration` at 60s.
+  LLM generation on large PDFs can exceed that. Prefer Docker / Render for
+  anything beyond a demo.
+
+## How to run
+
+Requires **Python 3.11+**. No API key is needed for tests or the offline example.
+
+```bash
+python -m venv .venv
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
+
+# Reproducible (what CI and Docker use)
+pip install -r requirements-dev.txt
+pip install -e . --no-deps
+
+# Or, looser ranges from package metadata
+# pip install -e ".[dev]"
+```
 
 ```bash
 cp .env.example .env
-# then edit .env and set:
-#   OPENAI_API_KEY=sk-...
-#   PDF_TO_JSON_MODEL=gpt-4o      # any JSON-mode-capable model
+# Set OPENAI_API_KEY only if you will call the live generator.
 ```
 
-The `.env` file is loaded automatically by the CLI and API. You can also just
-`export OPENAI_API_KEY=...` in your shell.
+`.env` is gitignored. Do not commit real keys.
 
----
-
-## CLI usage
+### Tests and lint (offline)
 
 ```bash
-# Translate a PDF and write a pretty JSON template to a file
-pdf-to-json translate path/to/report.pdf --output template.json
-
-# Print the template to stdout (great for piping)
-pdf-to-json translate path/to/report.pdf --pretty > template.json
-
-# Inspect the intermediate extraction WITHOUT calling the LLM (no key needed)
-pdf-to-json extract path/to/report.pdf
-
-# Validate an existing template against the strict schema (no key needed)
-pdf-to-json validate template.json
+ruff check src tests scripts api
+python -m pytest
 ```
 
-## Web UI
-
-The service ships with a **fully functional browser UI** — no separate frontend
-to build or deploy. Start the server and open it in your browser:
-
-```bash
-uvicorn pdf_to_json.api:app --reload --port 8000
-# then open http://localhost:8000/
-```
-
-From the page you can:
-
-- **Drag & drop (or pick) a PDF** and click **Translate PDF**.
-- **Edit the template in place** — every human-readable field (title, description,
-  business name, job address, intro/outro, and per-section voice prompt,
-  on-screen text, worker instructions, success criteria, suggested phrases,
-  writer instructions, default text, tone, and numbers like estimated seconds /
-  min marks / min summary words) is click-to-edit right in the clean summary.
-  Edits update the JSON tab and the download instantly; a modified field shows an
-  "edited" marker with a one-click **revert**, and **Reset all edits** restores
-  the original. Emptying a required field shows a validation warning and disables
-  download until fixed.
-- **Restructure visually** — sections are drag-to-reorder blocks (drag the ⠿
-  handle), each with a **Delete** button and an **+ Add section** button. Any
-  structural change keeps `guidance` and `content_structure` perfectly mirrored
-  and rewrites `capture_order` to a clean `1..N`.
-- **Configure photos per section** — each section has a **Photo slot** control to
-  toggle whether photos are required (`show_photo` + `image_placement.required`),
-  set `max_images`, and choose `image_placement.position` — no raw JSON needed.
-- **Download JSON** (prominent button) to export the current, edited template as
-  `{report_type}_template.json`, ready to drop into JobDoc.
-- See a live **service/health indicator** (shows whether your `OPENAI_API_KEY`
-  is configured).
-- View a **summary** (document class, report type, section count, estimated
-  minutes) and a readable **Overview** of every guidance section (voice prompt,
-  worker instructions, success criteria, suggested phrases, writer instructions,
-  and required fields).
-- Switch to the **JSON** tab for the syntax-highlighted template, then **Copy**
-  or **Download `.json`** to drop straight into JobDoc.
-
-The UI is a single self-contained page (`src/pdf_to_json/static/index.html`)
-served at `/`, so it works same-origin with no external dependencies.
-
-## API usage
-
-Start the service:
-
-```bash
-uvicorn pdf_to_json.api:app --reload --port 8000
-```
-
-Endpoints:
-
-- `GET /` → the browser UI (HTML)
-- `GET /info` → machine-readable service info + endpoint map
-- `GET /health` → `{"status": "ok", ..., "llm_configured": true, "model": "..."}`
-- `GET /schema` → the JSON Schema of the `ReportTemplate` output contract
-- `POST /translate` → multipart form upload (`file`), returns the validated JSON template
-- `GET /docs` → interactive OpenAPI docs
-
-Example:
-
-```bash
-curl -s -F "file=@path/to/report.pdf" http://localhost:8000/translate | jq .
-```
-
-Errors are reported clearly:
-- `400` — not a PDF / empty upload
-- `413` — file too large
-- `422` — a template could not be produced or failed strict validation (the body
-  contains the exact reasons)
-
----
-
-## Try it in under 5 minutes (offline demo)
-
-You do **not** need an API key to see a complete, valid example. This builds a
-sample HVAC PDF and translates it with a built-in deterministic generator:
+### Offline demo (no LLM)
 
 ```bash
 python scripts/run_example.py
-# -> writes examples/sample_output.json (validated)
+# writes examples/sample_output.json (validated)
+pdf-to-json validate examples/sample_output.json
 ```
 
-A committed example lives at
-[`examples/sample_output.json`](examples/sample_output.json).
-
-To run the **live** pipeline against your own PDF:
+### CLI (live LLM)
 
 ```bash
-python scripts/run_example.py --live path/to/report.pdf
+pdf-to-json translate path/to/report.pdf --output template.json
+pdf-to-json extract path/to/report.pdf          # no key needed
+pdf-to-json validate template.json              # no key needed
 ```
 
----
-
-## Reviewing a generated template before using it in JobDoc
-
-The output always passes strict validation, but you should still skim it:
-
-1. **Sections** — do `guidance.sections` follow the logical flow of the source
-   PDF? Section count is usually 6–12.
-2. **`worker_instructions` / `success_criteria`** — could a brand-new technician
-   complete each section using only these? They must be concrete and checkable.
-3. **`writer_instructions` / `fields`** — are they specific enough for the writing
-   agent to produce a high-quality section?
-4. **`document_class` / `report_type`** — correctly inferred?
-5. **`business_name` / `job_address`** — intentionally left blank unless clearly
-   present in the source; fill in per-job in JobDoc.
-
-Re-validate any edits at any time:
+### API / browser UI
 
 ```bash
-pdf-to-json validate template.json
+uvicorn pdf_to_json.api:app --reload --port 8000
+# http://localhost:8000/        UI
+# GET  /health                  liveness + llm_configured
+# GET  /schema                  output JSON Schema
+# POST /translate               multipart field `file`
 ```
-
----
-
-## The output contract (schema_version 3)
-
-Enforced by [`src/pdf_to_json/schema.py`](src/pdf_to_json/schema.py). Hard rules:
-
-- Every `section_id` in `guidance.sections` exists in `content_structure.sections`
-  and vice-versa (**perfect 1:1 mirroring**).
-- `capture_order` is a **complete sequential** `1..N` sequence.
-- All human-facing text fields are **non-empty**; `section_id` and `report_type`
-  are snake_case; colors are valid hex.
-- Thin `worker_instructions` / `success_criteria` / `writer_instructions` or a
-  low `min_summary_words` are surfaced as **non-blocking quality warnings** (they
-  never reject a schema-valid template). The CLI prints them and the API returns
-  them in an `X-Quality-Warnings` header; the web UI shows them as an amber note.
-- **Severity uses the JobDoc gold-standard vocabulary only**:
-  `informational | minor | moderate | major | safety_critical`
-  (never `critical/high/medium/low/info`). Legacy vocabulary in model output is
-  auto-mapped to the gold standard during normalization.
-
-See the full annotated shape in the schema module and a real example in
-[`examples/sample_output.json`](examples/sample_output.json).
-
-### Production quality bar for generated templates
-
-The generator (prompt + few-shot + validation) is tuned so that:
-
-- **A day-one technician can complete the whole capture from the guidance alone.**
-  `worker_instructions` give concrete on-site steps — where to stand, what to look
-  for (layman + trade term), what to physically do, what to photograph, what to
-  say. Validation rejects vague one-liners.
-- **`success_criteria` are supervisor-checkable** — e.g. a minimum number of
-  photos plus a specific spoken confirmation. Thin criteria are flagged as a
-  non-blocking warning rather than rejected, so a usable template is never lost.
-- **`suggested_phrases` use real domain language** drawn from the source (for
-  roofing: ponding, blistering, gravel stop, flashing failure, soft decking,
-  membrane split, open seam, scupper), including a "no defect" phrase.
-- **`writer_instructions` force location-specific findings** and clear
-  **recommend-replace vs recommend-maintain** language, with severity assigned
-  from the gold-standard set.
-- **Times/marks are realistic for mobile capture** (info ~60–120s, inspecting an
-  area/system ~150–300s).
-
-The committed [`examples/sample_output.json`](examples/sample_output.json) is a
-commercial low-slope roof inspection template that demonstrates this bar.
-
----
-
-## Deployment
-
-The service is a standard ASGI (FastAPI) app started with:
 
 ```bash
-uvicorn pdf_to_json.api:app --host 0.0.0.0 --port $PORT
+curl -s -F "file=@path/to/report.pdf" http://localhost:8000/translate
 ```
 
-It reads configuration from environment variables (see `.env.example`):
-
-| Variable | Default | Purpose |
-| -------- | ------- | ------- |
-| `OPENAI_API_KEY` | — (required) | LLM access for generation. |
-| `PDF_TO_JSON_MODEL` | `gpt-4o` | Generation model. |
-| `PORT` | `8000` | Bind port (set automatically by most hosts). |
-| `PDF_TO_JSON_CORS_ORIGINS` | `*` | Comma-separated allowed origins. |
-| `PDF_TO_JSON_MAX_UPLOAD_MB` | `25` | Max upload size. |
-| `PDF_TO_JSON_LOG_LEVEL` | `INFO` | Log verbosity. |
-
-Use `GET /health` as the platform health check — it also reports
-`llm_configured`, so you can confirm your key was wired up correctly after a
-deploy.
-
-### Render (recommended)
-
-A [`render.yaml`](render.yaml) blueprint is included. Push to GitHub, then in
-Render choose **New + → Blueprint** and select the repo. Set `OPENAI_API_KEY` as
-a secret in the dashboard. The blueprint builds with `pip install .`, starts
-uvicorn on `$PORT`, and health-checks `/health`. A Docker option is included
-(commented out) in the same file.
-
-### Docker (portable: Railway, Fly.io, Cloud Run, any host)
+### Docker
 
 ```bash
 docker build -t pdf-to-json .
-docker run -p 8000:8000 -e OPENAI_API_KEY=sk-... pdf-to-json
-# -> http://localhost:8000/health
+docker run -p 8000:8000 -e OPENAI_API_KEY pdf-to-json
 ```
 
-### Vercel (works, with a caveat)
+Pass the key via the environment or a secret store. Do not bake it into the image.
 
-[`vercel.json`](vercel.json) + [`api/index.py`](api/index.py) expose the app as a
-Python serverless function. Just add `OPENAI_API_KEY` in the Vercel dashboard
-(the repository root is already the project root).
+## Measured results
 
-> ⚠️ Serverless functions have a max execution duration (60s on Hobby). The LLM
-> generation stage can approach or exceed this on large PDFs, causing timeouts.
-> For reliable production use, prefer **Render** or **Docker**. If you do use
-> Vercel, set `PDF_TO_JSON_MODEL=gpt-4o-mini` to reduce latency.
+Only numbers produced by a named command on a named date. Anything else is
+**not measured**.
 
-### Pre-launch checklist
+| Claim | Result | Command | Date |
+| ----- | ------ | ------- | ---- |
+| Offline unit/integration tests | **74 passed** in 0.45s | `python -m pytest` (Python 3.12.3, pinned deps in `requirements-dev.txt`) | 2026-10-19 |
+| Ruff (E, F, I, W) | **All checks passed** | `ruff check src tests scripts api` | 2026-10-19 |
+| Live LLM translation quality (section recall, edit rate, JobDoc drop-in success) | **not measured** | — | — |
+| Extraction quality on real client PDFs | **not measured** | — | — |
+| End-to-end latency / token cost | **not measured** | — | — |
+| Production uptime / error rate | **not measured** | — | — |
 
-- [ ] `OPENAI_API_KEY` set in the host's secret store (not committed).
-- [ ] `GET /health` returns `"llm_configured": true` after deploy.
-- [ ] `PDF_TO_JSON_CORS_ORIGINS` restricted to your frontend origin(s) in prod.
-- [ ] Smoke test: `curl -F "file=@sample.pdf" https://<host>/translate`.
-- [ ] Consider a smaller/faster model for cost during testing.
+The 74-test figure is the offline suite (schema, validator, normalize, generator
+sanitization, image hints, pipeline with a fake completer, API, committed
+fixture). It does **not** exercise OpenAI.
 
-### Troubleshooting: `401 invalid_api_key` even though the key is set
+## Known failure modes
 
-`/health` showing `llm_configured: true` only means a key is *present*, not that
-OpenAI accepts it. A 401 means the key value being sent is rejected. Common causes:
+- **Scanned or image-only PDFs.** No OCR. Extraction raises if usable text is
+  missing (`< ~20` characters). `is_probably_scanned` is set on near-empty
+  pdfplumber output.
+- **Sparse or unusual PDFs.** The model may omit required fields or break
+  section mirroring. The pipeline returns a validation error; it does not retry
+  generation.
+- **Malformed model JSON.** Fence-stripping and outermost `{...}` recovery are
+  best-effort. Non-objects still fail.
+- **Auth / model access.** HTTP 401 and missing-model 404 are mapped to a clear
+  `GenerationError` and are **not** retried. Rate limits, timeouts, and 5xx are
+  retried (tenacity, up to 3 attempts).
+- **`/health` `llm_configured: true` only means a key is present**, not that
+  OpenAI will accept it.
+- **Image-to-heading association is a heuristic** (nearest preceding heading by
+  page/y). Unassociated images exist; photo slots can be wrong on messy layouts.
+- **Quality warnings are non-blocking.** A template can be schema-valid and
+  still be a poor day-one workflow. Review before dropping into JobDoc.
+- **Default CORS is `*`.** Fine for a local prototype; pin origins in production.
+- **Vercel `maxDuration` is 60s** in `vercel.json`. Large PDFs + `gpt-4o` can
+  time out. Use Docker/Render for reliable runs.
+- **Schema drift vs JobDoc.** This repo owns a copy of `schema_version: 3`. If
+  the product schema moves, output can validate here and fail there.
+- **PII in source PDFs.** Uploaded documents are written to a temp file for the
+  request and can be sent to the configured LLM provider. Do not put real client
+  PDFs in this git repo. The committed example uses `100 Example Parkway`.
 
-- **Hidden characters** — surrounding quotes, a trailing space, or a newline
-  pasted into the dashboard / `.env`. The app now automatically strips quotes,
-  whitespace, newlines, and a stray `Bearer ` prefix, so re-saving the key usually
-  resolves it. Make sure you paste the **full** key with nothing extra.
-- **Rotated / revoked key** — generate a fresh key and update it.
-- **Wrong project/org** — a `sk-proj-…` key must belong to a project that can use
-  the selected `PDF_TO_JSON_MODEL`.
-- **Stale deploy** — after changing the env var on Render, trigger a redeploy so
-  the running instance picks up the new value.
+## Environment
 
-The `/translate` endpoint now returns a clear `422` message for these cases
-instead of a raw 401 dump.
+| Variable | Default | Purpose |
+| -------- | ------- | ------- |
+| `OPENAI_API_KEY` | empty (required for live generate) | LLM access. Sanitize-on-read strips quotes / `Bearer ` / whitespace. |
+| `PDF_TO_JSON_MODEL` | `gpt-4o` | JSON-mode-capable model. |
+| `PDF_TO_JSON_TEMPERATURE` | `0.2` | Sampling temperature. |
+| `PDF_TO_JSON_TIMEOUT` | `120` | LLM HTTP timeout (seconds). |
+| `OPENAI_BASE_URL` | SDK default | Azure / proxy base URL. |
+| `PORT` | `8000` | Bind port. |
+| `PDF_TO_JSON_CORS_ORIGINS` | `*` | Comma-separated origins. |
+| `PDF_TO_JSON_MAX_UPLOAD_MB` | `25` | Upload cap. |
+| `PDF_TO_JSON_LOG_LEVEL` | `INFO` | Log verbosity. |
 
-## Development & tests
+## Layout
 
-The schema and validator tests run **without an API key** (the pipeline test uses
-a fake LLM completer):
-
-```bash
-pytest            # 72 tests, all offline (schema, validator, normalize, generator, images, pipeline, API, UI)
 ```
-
-Project layout:
-
+src/pdf_to_json/     schema, extract, generate, normalize, validate, pipeline, CLI, API, UI
+tests/               offline tests (no API key)
+examples/            synthetic sample_output.json
+scripts/run_example.py
+.github/workflows/ci.yml    ruff + pytest on Python 3.11 and 3.12
+requirements.txt            pinned runtime deps
+requirements-dev.txt        pinned pytest / httpx / ruff
 ```
-.
-├── src/pdf_to_json/
-│   ├── schema.py       # Gold-standard Pydantic models (schema_version 3)
-│   ├── extractor.py    # PDF → clean intermediate content
-│   ├── prompts.py      # System prompt + few-shot + prompt assembly
-│   ├── generator.py    # Intermediate → template dict (LLM reasoning)
-│   ├── normalize.py    # Repair small LLM quirks before validation
-│   ├── validator.py    # Strict validation + mirroring/quality checks
-│   ├── pipeline.py     # extract → generate → normalize → validate
-│   ├── cli.py          # Typer CLI
-│   ├── api.py          # FastAPI app (serves the UI + JSON API)
-│   └── static/index.html  # Self-contained browser UI
-├── tests/              # schema, validator, pipeline, API (offline)
-├── examples/           # sample_output.json
-├── scripts/run_example.py
-├── api/index.py        # Vercel serverless entry point
-├── Dockerfile          # portable container image
-├── render.yaml         # Render blueprint
-├── Procfile            # Heroku/Render-style start command
-└── vercel.json         # Vercel config
-```
-
-## Design principles
-
-- **Validation is mandatory.** The pipeline never returns an invalid template.
-- **Isolated.** The schema is the only contract with JobDoc.
-- **Explicit over clever.** Typed, readable, maintainable code.
-- **No CV dependency** for the MVP — text extraction + LLM reasoning is enough.
 
 ## License
 
-MIT
+Proprietary. See [`LICENSE.md`](LICENSE.md). No rights are granted by this
+README.
