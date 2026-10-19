@@ -18,14 +18,14 @@ from pdf_to_json.generator import (
         (None, ""),
         ("", ""),
         ("   ", ""),
-        ("sk-abc123", "sk-abc123"),
-        ("  sk-abc123  ", "sk-abc123"),
-        ('"sk-abc123"', "sk-abc123"),
-        ("'sk-abc123'", "sk-abc123"),
-        ("sk-abc123\n", "sk-abc123"),
-        ("Bearer sk-abc123", "sk-abc123"),
-        ("bearer  sk-abc123", "sk-abc123"),
-        ("sk-abc\t123\n", "sk-abc123"),
+        ("sk-test-abc123", "sk-test-abc123"),
+        ("  sk-test-abc123  ", "sk-test-abc123"),
+        ('"sk-test-abc123"', "sk-test-abc123"),
+        ("'sk-test-abc123'", "sk-test-abc123"),
+        ("sk-test-abc123\n", "sk-test-abc123"),
+        ("Bearer sk-test-abc123", "sk-test-abc123"),
+        ("bearer  sk-test-abc123", "sk-test-abc123"),
+        ("sk-test-abc\t123\n", "sk-test-abc123"),
     ],
 )
 def test_clean_api_key(raw, expected):
@@ -33,8 +33,8 @@ def test_clean_api_key(raw, expected):
 
 
 def test_configured_api_key_reads_env(monkeypatch):
-    monkeypatch.setenv("OPENAI_API_KEY", '  "sk-live-xyz"\n')
-    assert configured_api_key() == "sk-live-xyz"
+    monkeypatch.setenv("OPENAI_API_KEY", '  "sk-test-placeholder"\n')
+    assert configured_api_key() == "sk-test-placeholder"
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     assert configured_api_key() == ""
 

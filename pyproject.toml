@@ -8,27 +8,31 @@ version = "0.1.0"
 description = "Translate real-world trades PDFs into valid GenerSwift ReportTemplate JSON (schema_version 3)."
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
-authors = [{ name = "GenerSwift" }]
+license = { text = "Proprietary. See LICENSE.md. All rights reserved." }
+authors = [{ name = "Danny Barren" }]
 keywords = ["pdf", "json", "report-template", "generswift", "jobdoc", "llm"]
 
+# Direct dependencies. Keep these in sync with requirements.txt.
+# Ranges exclude known-incompatible majors (PyMuPDF 2 pulls ONNX extras the
+# extractor does not use; OpenAI SDK 2/3 change the HTTP stack).
 dependencies = [
     "pydantic>=2.6,<3",
-    "pdfplumber>=0.11",
-    "pymupdf>=1.24",
-    "openai>=1.30",
-    "fastapi>=0.110",
-    "uvicorn[standard]>=0.29",
-    "typer>=0.12",
-    "python-multipart>=0.0.9",
-    "python-dotenv>=1.0",
-    "tenacity>=8.2",
+    "pdfplumber>=0.11,<0.12",
+    "pymupdf>=1.24,<2",
+    "openai>=1.30,<2",
+    "fastapi>=0.110,<1",
+    "uvicorn[standard]>=0.29,<1",
+    "typer>=0.12,<1",
+    "python-multipart>=0.0.9,<1",
+    "python-dotenv>=1.0,<2",
+    "tenacity>=8.2,<10",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8.0",
-    "httpx>=0.27",
+    "pytest>=8.0,<10",
+    "httpx>=0.27,<1",
+    "ruff==0.17.1",
 ]
 
 [project.scripts]
@@ -37,9 +41,22 @@ pdf-to-json = "pdf_to_json.cli:app"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+pdf_to_json = ["py.typed", "static/*"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
 
-[tool.setuptools.package-data]
-pdf_to_json = ["py.typed", "static/*"]
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests", "scripts"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"scripts/run_example.py" = ["E402", "I001"]
+"api/index.py" = ["E402"]

@@ -7,6 +7,7 @@ checklist, work order, ...) into a valid GenerSwift ReportTemplate JSON
 
 from __future__ import annotations
 
+from .normalize import normalize_template
 from .schema import (
     SCHEMA_VERSION,
     ContentSection,
@@ -18,7 +19,6 @@ from .schema import (
     PdfStyling,
     ReportTemplate,
 )
-from .normalize import normalize_template
 from .validator import (
     TemplateValidationError,
     quality_warnings,
