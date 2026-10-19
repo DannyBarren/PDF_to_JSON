@@ -12,11 +12,13 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# Install dependencies first for better layer caching.
-COPY pyproject.toml README.md ./
+# Install pinned runtime deps first for better layer caching, then the package.
+COPY pyproject.toml README.md LICENSE.md requirements.txt ./
 COPY src ./src
 
-RUN pip install --upgrade pip && pip install .
+RUN pip install --upgrade pip \
+    && pip install -r requirements.txt \
+    && pip install --no-deps .
 
 EXPOSE 8000
 

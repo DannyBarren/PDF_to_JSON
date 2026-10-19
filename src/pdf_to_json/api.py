@@ -201,7 +201,8 @@ async def translate(file: UploadFile = File(...)) -> JSONResponse:
         except Exception as exc:  # pragma: no cover - defensive catch-all
             logger.exception("Unexpected error translating %s", filename)
             raise HTTPException(
-                status_code=500, detail=f"Unexpected error: {exc}"
+                status_code=500,
+                detail="Unexpected error while translating the PDF.",
             ) from exc
 
     elapsed = time.perf_counter() - started

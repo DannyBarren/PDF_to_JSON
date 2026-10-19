@@ -1,16 +1,13 @@
-# Runtime dependencies for PDF -> JSON Template Translator
-# (Mirror of [project].dependencies in pyproject.toml)
-pydantic>=2.6,<3
-pdfplumber>=0.11
-pymupdf>=1.24
-openai>=1.30
-fastapi>=0.110
-uvicorn[standard]>=0.29
-typer>=0.12
-python-multipart>=0.0.9
-python-dotenv>=1.0
-tenacity>=8.2
-
-# Dev / test extras
-pytest>=8.0
-httpx>=0.27
+# Pinned runtime dependencies for reproducible installs / CI / Docker.
+# Keep the package names and major bounds in sync with pyproject.toml.
+# Resolved 2026-10-19 against Python 3.12; re-pin after a deliberate upgrade.
+pydantic==2.14.1
+pdfplumber==0.11.10
+pymupdf==1.28.2
+openai==1.109.1
+fastapi==0.149.0
+uvicorn[standard]==0.54.0
+typer==0.27.3
+python-multipart==0.0.32
+python-dotenv==1.2.4
+tenacity==9.2.1

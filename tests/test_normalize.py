@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from pdf_to_json.normalize import normalize_template
 from pdf_to_json.validator import validate_template
 from tests.conftest import make_valid_template
